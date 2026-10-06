@@ -2,7 +2,7 @@ using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Text.RegularExpressions;
 
-namespace Msar.Authz;
+namespace Casl;
 
 // The condition tree a MongoDB-style query parses into. One tree feeds both the in-memory check
 // and the LINQ expression EF Core translates to SQL.
@@ -45,7 +45,7 @@ internal static class ConditionParser
                     items.Add(new NotCondition(new OrCondition(SubQueries(key, value))));
                     break;
                 case var op when op.StartsWith('$'):
-                    throw new AuthzConfigurationException($"Operator '{op}' is not supported at the top of a query.");
+                    throw new CaslConfigurationException($"Operator '{op}' is not supported at the top of a query.");
                 default:
                     items.Add(ParseField(key, value));
                     break;
@@ -57,8 +57,8 @@ internal static class ConditionParser
 
     private static List<Condition> SubQueries(string op, JsonNode? value) =>
         value is JsonArray array && array.Count > 0
-            ? array.Select(n => n is JsonObject o ? ParseQuery(o) : throw new AuthzConfigurationException($"'{op}' needs an array of query objects.")).ToList()
-            : throw new AuthzConfigurationException($"'{op}' needs a non-empty array.");
+            ? array.Select(n => n is JsonObject o ? ParseQuery(o) : throw new CaslConfigurationException($"'{op}' needs an array of query objects.")).ToList()
+            : throw new CaslConfigurationException($"'{op}' needs a non-empty array.");
 
     private static Condition ParseField(string path, JsonNode? value)
     {
@@ -69,8 +69,8 @@ internal static class ConditionParser
 
         return value switch
         {
-            JsonObject => throw new AuthzConfigurationException($"Matching '{path}' against a whole object isn't supported; use dotted paths such as '{path}.id'."),
-            JsonArray => throw new AuthzConfigurationException($"Matching '{path}' against an exact array isn't supported; use $in or $all."),
+            JsonObject => throw new CaslConfigurationException($"Matching '{path}' against a whole object isn't supported; use dotted paths such as '{path}.id'."),
+            JsonArray => throw new CaslConfigurationException($"Matching '{path}' against an exact array isn't supported; use $in or $all."),
             _ => new FieldCondition(path, "$eq", value?.DeepClone()),
         };
     }
@@ -83,9 +83,9 @@ internal static class ConditionParser
             switch (op)
             {
                 case "$in" or "$nin" when value is not JsonArray && !Placeholders.IsWholePlaceholder(value):
-                    throw new AuthzConfigurationException($"'{op}' on '{path}' needs an array.");
+                    throw new CaslConfigurationException($"'{op}' on '{path}' needs an array.");
                 case "$exists" when value is not JsonValue v || !v.TryGetValue(out bool _):
-                    throw new AuthzConfigurationException($"'$exists' on '{path}' needs true or false.");
+                    throw new CaslConfigurationException($"'$exists' on '{path}' needs true or false.");
                 case var c when ComparisonOperators.Contains(c):
                     items.Add(new FieldCondition(path, op, value?.DeepClone()));
                     break;
@@ -102,7 +102,7 @@ internal static class ConditionParser
                         : ParseQuery(inner)));
                     break;
                 default:
-                    throw new AuthzConfigurationException($"Operator '{op}' on '{path}' is not supported. Supported: $eq $ne $gt $gte $lt $lte $in $nin $exists $not $all $elemMatch $and $or $nor.");
+                    throw new CaslConfigurationException($"Operator '{op}' on '{path}' is not supported. Supported: $eq $ne $gt $gte $lt $lte $in $nin $exists $not $all $elemMatch $and $or $nor.");
             }
         }
 
@@ -169,7 +169,7 @@ internal sealed class VariableScope
         JsonNode? node = variables as JsonNode ?? JsonSerializer.SerializeToNode(variables);
         if (node is not JsonObject obj)
         {
-            throw new AuthzConfigurationException("Variables must be an object, such as new { user = new { id } }.");
+            throw new CaslConfigurationException("Variables must be an object, such as new { user = new { id } }.");
         }
 
         _layers.Insert(0, obj);
@@ -197,7 +197,7 @@ internal sealed class VariableScope
             }
         }
 
-        throw new AuthzConfigurationException($"No value for placeholder '${{{path}}}'.");
+        throw new CaslConfigurationException($"No value for placeholder '${{{path}}}'.");
     }
 
     private static bool TryResolve(JsonObject root, string path, out JsonNode? value)

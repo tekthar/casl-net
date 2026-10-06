@@ -3,15 +3,15 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { subject } from '@casl/ability';
-import { createMsarAbility } from '@msar/authz-casl';
+import { createAbility } from 'casl-net';
 
 const fixture = JSON.parse(readFileSync(new URL('./fixture.json', import.meta.url), 'utf8'));
 
-test('@casl/ability agrees with Msar.Authz on every exported rule set', () => {
+test('@casl/ability agrees with CASL .NET on every exported rule set', () => {
   let checks = 0;
   const mismatches = [];
   for (const [caseIndex, c] of fixture.cases.entries()) {
-    const ability = createMsarAbility(c.rules);
+    const ability = createAbility(c.rules);
     for (const check of c.checks) {
       const item = subject('WorkItem', { ...fixture.items[check.item] });
       const actual = check.field === undefined

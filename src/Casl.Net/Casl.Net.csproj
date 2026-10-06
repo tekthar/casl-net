@@ -2,6 +2,9 @@
 
   <PropertyGroup>
     <TargetFrameworks>net8.0;net10.0</TargetFrameworks>
+    <PackageId>Casl.Net</PackageId>
+    <RootNamespace>Casl</RootNamespace>
+    <Title>CASL .NET</Title>
     <Description>CASL-compatible authorization for .NET. One set of rules (MongoDB-style conditions, the format CASL uses) is checked against objects in memory, translated to SQL by EF Core through LINQ expressions, and can be sent to the browser for @casl/ability.</Description>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
     <NoWarn>$(NoWarn);CS1591</NoWarn>
@@ -9,7 +12,7 @@
 
   <ItemGroup>
     <None Include="..\..\README.md" Pack="true" PackagePath="\" />
-    <InternalsVisibleTo Include="Msar.Authz.Tests" />
+    <InternalsVisibleTo Include="Casl.Net.Tests" />
   </ItemGroup>
 
 </Project>

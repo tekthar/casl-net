@@ -1,6 +1,6 @@
 using System.Text.Json.Nodes;
 
-namespace Msar.Authz;
+namespace Casl;
 
 /// <summary>
 /// Adjusts conditions so @casl/ability in the browser reaches the same answers as this library, without
@@ -8,7 +8,7 @@ namespace Msar.Authz;
 /// - CASL treats a missing or null field as smaller than any value, so <c>{ dueAt: { $lt: X } }</c> would match
 ///   items with no due date. MongoDB, SQL and .NET don't. Ordering operators get <c>$ne: null</c> alongside.
 /// - CASL's <c>$in: [null]</c> doesn't match a missing field; MongoDB's does. Null moves into an <c>$or</c>.
-/// The browser also needs CASL's logical operators switched on; the <c>@msar/authz-casl</c> package does that.
+/// The browser also needs CASL's logical operators switched on; the <c>casl-net</c> package does that.
 /// </summary>
 internal static class CaslExport
 {

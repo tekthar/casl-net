@@ -1,0 +1,8 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/Casl.Net/Casl.Net.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/Casl.Net.Tests/Casl.Net.Tests.csproj" />
+  </Folder>
+</Solution>

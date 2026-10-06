@@ -2,7 +2,7 @@ using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Text.Json.Serialization;
 
-namespace Msar.Authz;
+namespace Casl;
 
 /// <summary>
 /// A rule in CASL's raw format: <c>{ action, subject, conditions, fields, inverted, reason }</c>.
@@ -41,7 +41,7 @@ public sealed record RawRule
         JsonSerializer.Deserialize<List<RawRule>>(json) ?? [];
 
     public static RawRule Parse(string json) =>
-        JsonSerializer.Deserialize<RawRule>(json) ?? throw new AuthzConfigurationException("Empty rule.");
+        JsonSerializer.Deserialize<RawRule>(json) ?? throw new CaslConfigurationException("Empty rule.");
 
     public string ToJson() => JsonSerializer.Serialize(this);
 
@@ -110,4 +110,4 @@ internal sealed class RawRuleJsonConverter : JsonConverter<RawRule>
 }
 
 /// <summary>Thrown when rules or subjects are configured in a way that can't be enforced safely.</summary>
-public sealed class AuthzConfigurationException(string message) : Exception(message);
+public sealed class CaslConfigurationException(string message) : Exception(message);

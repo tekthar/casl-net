@@ -1,13 +1,13 @@
 {
-  "name": "msar-authz-casl-compat",
+  "name": "casl-net-compat",
   "private": true,
   "type": "module",
-  "description": "Checks that @casl/ability reaches the same decisions as Msar.Authz on the rules it exports.",
+  "description": "Checks that @casl/ability reaches the same decisions as CASL .NET on the rules it exports.",
   "scripts": {
     "test": "node --test"
   },
   "devDependencies": {
     "@casl/ability": "7.0.1",
-    "@msar/authz-casl": "file:../../packages/authz-casl"
+    "casl-net": "file:../../packages/casl-net"
   }
 }

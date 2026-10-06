@@ -5,7 +5,7 @@ using System.Reflection;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 
-namespace Msar.Authz;
+namespace Casl;
 
 /// <summary>
 /// Turns a condition tree into a LINQ expression over a subject type.
@@ -31,7 +31,7 @@ internal sealed class ExpressionBuilder(SubjectDefinition subject, bool nullSafe
         NotCondition not => Expression.Not(Build(not.Inner, target, pathPrefix)),
         FieldCondition field => BuildField(field, target, pathPrefix),
         ElemMatchCondition elem => BuildElemMatch(elem, target, pathPrefix),
-        _ => throw new AuthzConfigurationException($"Unsupported condition {condition.GetType().Name}."),
+        _ => throw new CaslConfigurationException($"Unsupported condition {condition.GetType().Name}."),
     };
 
     private Expression BuildField(FieldCondition field, Expression target, string pathPrefix)
@@ -68,7 +68,7 @@ internal sealed class ExpressionBuilder(SubjectDefinition subject, bool nullSafe
         string fullPath = Join(pathPrefix, elem.Path);
         (Expression member, Type memberType) = Access(target, elem.Path);
         Type elementType = ElementTypeOf(memberType)
-            ?? throw new AuthzConfigurationException($"'$elemMatch' needs a collection, but '{fullPath}' is {memberType.Name}.");
+            ?? throw new CaslConfigurationException($"'$elemMatch' needs a collection, but '{fullPath}' is {memberType.Name}.");
         ParameterExpression e = Expression.Parameter(elementType, "e");
         return AnyOf(member, e, Build(elem.Inner, e, fullPath));
     }
@@ -91,7 +91,7 @@ internal sealed class ExpressionBuilder(SubjectDefinition subject, bool nullSafe
                 Type core = Nullable.GetUnderlyingType(memberType) ?? memberType;
                 if (core == typeof(string) || core == typeof(bool) || core == typeof(Guid) || core.IsEnum)
                 {
-                    throw new AuthzConfigurationException($"'{op}' isn't supported on '{path}' ({core.Name}); ordering of text differs between .NET and databases.");
+                    throw new CaslConfigurationException($"'{op}' isn't supported on '{path}' ({core.Name}); ordering of text differs between .NET and databases.");
                 }
 
                 if (value is null)
@@ -108,7 +108,7 @@ internal sealed class ExpressionBuilder(SubjectDefinition subject, bool nullSafe
                     _ => Expression.LessThanOrEqual(member, right),
                 };
             default:
-                throw new AuthzConfigurationException($"Operator '{op}' is not supported.");
+                throw new CaslConfigurationException($"Operator '{op}' is not supported.");
         }
     }
 
@@ -203,7 +203,7 @@ internal sealed class ExpressionBuilder(SubjectDefinition subject, bool nullSafe
     {
         if (!subject.ConditionPaths.Contains(fullPath))
         {
-            throw new AuthzConfigurationException($"Conditions on '{subject.Name}.{fullPath}' are not allowed. Register the path with ConditionFields(\"{fullPath}\").");
+            throw new CaslConfigurationException($"Conditions on '{subject.Name}.{fullPath}' are not allowed. Register the path with ConditionFields(\"{fullPath}\").");
         }
     }
 
@@ -291,7 +291,7 @@ internal static class ValueConverter
         }
         catch (Exception ex) when (ex is FormatException or InvalidOperationException or InvalidCastException or ArgumentException or OverflowException or JsonException)
         {
-            throw new AuthzConfigurationException($"Value {value.ToJsonString()} for '{path}' can't be used as {type.Name}: {ex.Message}.");
+            throw new CaslConfigurationException($"Value {value.ToJsonString()} for '{path}' can't be used as {type.Name}: {ex.Message}.");
         }
     }
 }

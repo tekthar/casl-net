@@ -1,6 +1,6 @@
 # Security policy
 
-Msar.Authz decides who can see and change data, so a bug can be a security issue.
+CASL .NET decides who can see and change data, so a bug can be a security issue.
 
 **Please don't open public issues for vulnerabilities.** Report them privately through GitHub's "Report a vulnerability" button on this repository (Security → Advisories). Include a rule set and an entity that reproduce the problem if you can.
 

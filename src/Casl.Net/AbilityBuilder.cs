@@ -1,7 +1,7 @@
 using System.Linq.Expressions;
 using System.Text.Json.Nodes;
 
-namespace Msar.Authz;
+namespace Casl;
 
 /// <summary>
 /// Collects rules (from code, from a database, from role grants), fills in placeholders and validates
@@ -68,7 +68,7 @@ public sealed class AbilityBuilder(SubjectRegistry subjects)
             _ = Compile(rule, subjects, validateValues: false);
             return [];
         }
-        catch (AuthzConfigurationException ex)
+        catch (CaslConfigurationException ex)
         {
             return [ex.Message];
         }
@@ -78,14 +78,14 @@ public sealed class AbilityBuilder(SubjectRegistry subjects)
     {
         if (rule.Action.Count == 0 || rule.Action.Any(string.IsNullOrWhiteSpace))
         {
-            throw new AuthzConfigurationException("A rule needs at least one action.");
+            throw new CaslConfigurationException("A rule needs at least one action.");
         }
 
         foreach (string subject in rule.Subject)
         {
             if (!subjects.IsKnown(subject))
             {
-                throw new AuthzConfigurationException($"Unknown subject '{subject}'.");
+                throw new CaslConfigurationException($"Unknown subject '{subject}'.");
             }
         }
 
@@ -96,7 +96,7 @@ public sealed class AbilityBuilder(SubjectRegistry subjects)
             {
                 if (condition is not null || rule.Fields is not null)
                 {
-                    throw new AuthzConfigurationException("Rules on 'all' can't have conditions or fields; name the subjects instead.");
+                    throw new CaslConfigurationException("Rules on 'all' can't have conditions or fields; name the subjects instead.");
                 }
 
                 continue;
@@ -107,7 +107,7 @@ public sealed class AbilityBuilder(SubjectRegistry subjects)
             {
                 if (!definition.Fields.Contains(field))
                 {
-                    throw new AuthzConfigurationException($"'{subjectName}' has no field '{field}' for field-level rules.");
+                    throw new CaslConfigurationException($"'{subjectName}' has no field '{field}' for field-level rules.");
                 }
             }
 

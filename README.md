@@ -1,4 +1,6 @@
-# Msar.Authz
+# CASL .NET
+
+> An independent, community-built .NET implementation of [CASL](https://casl.js.org)'s rule format and semantics. Not affiliated with or endorsed by CASL or its author.
 
 **CASL-compatible authorization for .NET.** Write permission rules once, in the [CASL](https://casl.js.org) format, and use them three ways:
 
@@ -8,14 +10,16 @@
 
 All three give the same answers. That isn't a promise; two tests check it on every build:
 - **Database vs memory:** 400 random rule sets × 2 actions × 120 entities on a real EF Core database. The SQL filter and the in-memory check return the same rows every time.
-- **CASL compatibility:** 24,000 decisions on 150 random rule sets, made by Msar.Authz and by `@casl/ability` 7, all identical.
+- **CASL compatibility:** 24,000 decisions on 150 random rule sets, made by CASL .NET and by `@casl/ability` 7, all identical.
 
-Msar.Authz is part of [Msar](https://github.com/msar-dev), an open-source work management platform, but it has no dependency on Msar, ABP or anything else beyond .NET. Use it in any .NET 8 or later application.
+It has no dependencies beyond .NET itself, so you can use it in any .NET 8 or later application, with or without EF Core. It was first built for [Msar](https://github.com/msar-dev), an open-source work management platform, and is maintained as a standalone project.
 
 ## Quick start
 
+Everything lives in the `Casl` namespace: `using Casl;`.
+
 ```bash
-dotnet add package Msar.Authz --prerelease
+dotnet add package Casl.Net --prerelease
 ```
 
 ```csharp
@@ -54,10 +58,10 @@ Rules are plain JSON in CASL's format, so they can live in a database table and 
 In the browser:
 
 ```js
-import { createMsarAbility } from '@msar/authz-casl';
+import { createAbility } from 'casl-net';
 import { subject } from '@casl/ability';
 
-const ability = createMsarAbility(rulesFromServer);
+const ability = createAbility(rulesFromServer);
 ability.can('update', subject('WorkItem', item));
 ```
 
@@ -90,9 +94,9 @@ How they behave:
 ## Repository
 
 ```
-src/Msar.Authz/             the library (net8.0, net10.0)
-packages/authz-casl/        @msar/authz-casl, the browser companion
-tests/Msar.Authz.Tests/     unit tests and the database-vs-memory equivalence test (EF Core + SQLite)
+src/Casl.Net/               the library (package Casl.Net, namespace Casl; net8.0, net10.0)
+packages/casl-net/          casl-net on npm, the browser companion
+tests/Casl.Net.Tests/       unit tests and the database-vs-memory equivalence test (EF Core + SQLite)
 tests/casl-compat/          the CASL compatibility test (Node, real @casl/ability)
 ```
 
@@ -110,4 +114,4 @@ Preview (0.1.0-preview.1). The API may change before 1.0. Planned next:
 
 ## Credits and licence
 
-Apache License 2.0. Msar.Authz is an independent implementation of CASL's rule format and semantics. CASL ([stalniy/casl](https://github.com/stalniy/casl)) is MIT-licensed, and its design is what this library follows. No CASL code is included in the .NET library.
+Apache License 2.0. CASL .NET is an independent implementation of CASL's rule format and semantics. CASL ([stalniy/casl](https://github.com/stalniy/casl)) is MIT-licensed, and its design is what this library follows. No CASL code is included in the .NET library.

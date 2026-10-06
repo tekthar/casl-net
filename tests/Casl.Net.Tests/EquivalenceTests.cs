@@ -5,7 +5,7 @@ using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Xunit.Abstractions;
 
-namespace Msar.Authz.Tests;
+namespace Casl.Tests;
 
 /// <summary>
 /// The test that keeps this library honest: for hundreds of random rule sets, the rows EF Core returns

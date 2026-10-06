@@ -1,6 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 
-namespace Msar.Authz.Tests;
+namespace Casl.Tests;
 
 public enum WorkStatus { Open, InProgress, Done }
 

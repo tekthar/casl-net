@@ -1,7 +1,7 @@
 {
-  "name": "@msar/authz-casl",
+  "name": "casl-net",
   "version": "0.1.0-preview.1",
-  "description": "Use Msar.Authz rules in the browser: @casl/ability with the MongoDB logical operators ($and, $or, $nor, $not) switched on, so it reaches the same decisions as the .NET library.",
+  "description": "Use CASL .NET rules in the browser: @casl/ability with the MongoDB logical operators ($and, $or, $nor, $not) switched on, so it reaches the same decisions as the .NET library.",
   "license": "Apache-2.0",
   "type": "module",
   "main": "./index.js",
@@ -19,14 +19,14 @@
   ],
   "repository": {
     "type": "git",
-    "url": "https://github.com/msar-dev/msar-authz.git",
-    "directory": "packages/authz-casl"
+    "url": "https://github.com/msar-dev/casl-net.git",
+    "directory": "packages/casl-net"
   },
   "keywords": [
     "casl",
     "authorization",
     "permissions",
-    "msar"
+    "dotnet"
   ],
   "peerDependencies": {
     "@casl/ability": "^6.7.0 || ^7.0.0"

@@ -1,7 +1,7 @@
 using System.Linq.Expressions;
 using System.Reflection;
 
-namespace Msar.Authz;
+namespace Casl;
 
 /// <summary>
 /// Maps subject names to CLR types and lists, per subject, which member paths rules may use in conditions
@@ -20,7 +20,7 @@ public sealed class SubjectRegistry
     {
         if (name == AllSubjects)
         {
-            throw new AuthzConfigurationException($"'{AllSubjects}' is reserved.");
+            throw new CaslConfigurationException($"'{AllSubjects}' is reserved.");
         }
 
         SubjectBuilder<T> builder = new();
@@ -34,10 +34,10 @@ public sealed class SubjectRegistry
     public IEnumerable<SubjectDefinition> Subjects => _byName.Values;
 
     public SubjectDefinition Get(string name) =>
-        _byName.TryGetValue(name, out SubjectDefinition? d) ? d : throw new AuthzConfigurationException($"Unknown subject '{name}'.");
+        _byName.TryGetValue(name, out SubjectDefinition? d) ? d : throw new CaslConfigurationException($"Unknown subject '{name}'.");
 
     public SubjectDefinition Get(Type type) =>
-        _byType.TryGetValue(type, out SubjectDefinition? d) ? d : throw new AuthzConfigurationException($"Type '{type.Name}' is not a registered subject.");
+        _byType.TryGetValue(type, out SubjectDefinition? d) ? d : throw new CaslConfigurationException($"Type '{type.Name}' is not a registered subject.");
 
     public bool IsKnown(string name) => name == AllSubjects || _byName.ContainsKey(name);
 }
@@ -104,7 +104,7 @@ internal static class MemberPath
         {
             MemberInfo member = (MemberInfo?)current.GetProperty(segment, BindingFlags.Public | BindingFlags.Instance | BindingFlags.IgnoreCase)
                 ?? current.GetField(segment, BindingFlags.Public | BindingFlags.Instance | BindingFlags.IgnoreCase)
-                ?? throw new AuthzConfigurationException($"'{root.Name}' has no member '{path}' (segment '{segment}').");
+                ?? throw new CaslConfigurationException($"'{root.Name}' has no member '{path}' (segment '{segment}').");
             members.Add(member);
             current = member is PropertyInfo p ? p.PropertyType : ((FieldInfo)member).FieldType;
             current = ExpressionBuilder.ElementTypeOf(current) ?? current; // "comments.authorId" steps into the element
@@ -144,6 +144,6 @@ internal static class MemberPath
             node = m.Expression;
         }
 
-        return names.Count > 0 ? string.Join('.', names) : throw new AuthzConfigurationException("Use a member access such as x => x.ProjectId.");
+        return names.Count > 0 ? string.Join('.', names) : throw new CaslConfigurationException("Use a member access such as x => x.ProjectId.");
     }
 }

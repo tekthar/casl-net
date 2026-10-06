@@ -1,7 +1,7 @@
 using System.Collections.Concurrent;
 using System.Linq.Expressions;
 
-namespace Msar.Authz;
+namespace Casl;
 
 /// <summary>
 /// What one user may do: a set of rules with placeholders already filled in.
@@ -111,7 +111,7 @@ public sealed class Ability
     /// <summary>
     /// The rules for @casl/ability in the browser: allow rules first, deny rules last, so CASL's
     /// "later rule wins" gives the same deny-overrides answers as this class. Conditions are adjusted where
-    /// CASL's matcher departs from MongoDB semantics. Create the browser ability with <c>@msar/authz-casl</c>,
+    /// CASL's matcher departs from MongoDB semantics. Create the browser ability with <c>casl-net</c>,
     /// which switches on CASL's logical operators ($and, $or, $nor, $not).
     /// </summary>
     public IReadOnlyList<RawRule> ToCaslRules() =>
@@ -185,13 +185,13 @@ public sealed class Ability
             {
                 return _subjects.Get(type);
             }
-            catch (AuthzConfigurationException) when (type.BaseType is not null)
+            catch (CaslConfigurationException) when (type.BaseType is not null)
             {
                 // EF Core proxies derive from the entity type
             }
         }
 
-        throw new AuthzConfigurationException($"Type '{instance.GetType().Name}' is not a registered subject.");
+        throw new CaslConfigurationException($"Type '{instance.GetType().Name}' is not a registered subject.");
     }
 }
 
@@ -206,7 +206,7 @@ public sealed class ForbiddenException(string action, string subject, string? fi
     public string? Reason { get; } = reason;
 }
 
-public static class QueryableAuthzExtensions
+public static class QueryableCaslExtensions
 {
     /// <summary>Only the rows the ability allows for <paramref name="action"/>.</summary>
     public static IQueryable<T> AccessibleBy<T>(this IQueryable<T> query, Ability ability, string action = "read") =>

@@ -5,11 +5,11 @@
     <LangVersion>latest</LangVersion>
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
 
-    <Authors>Msar contributors</Authors>
-    <Copyright>Copyright 2026 Msar contributors</Copyright>
+    <Authors>CASL .NET contributors</Authors>
+    <Copyright>Copyright 2026 CASL .NET contributors</Copyright>
     <PackageLicenseExpression>Apache-2.0</PackageLicenseExpression>
-    <PackageProjectUrl>https://github.com/msar-dev/msar-authz</PackageProjectUrl>
-    <RepositoryUrl>https://github.com/msar-dev/msar-authz</RepositoryUrl>
+    <PackageProjectUrl>https://github.com/msar-dev/casl-net</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/msar-dev/casl-net</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
     <PackageReadmeFile>README.md</PackageReadmeFile>
     <PackageTags>authorization;permissions;abac;rbac;casl;ef-core;linq;row-level-security</PackageTags>

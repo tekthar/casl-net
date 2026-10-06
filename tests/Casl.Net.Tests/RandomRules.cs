@@ -1,6 +1,6 @@
 using System.Text.Json.Nodes;
 
-namespace Msar.Authz.Tests;
+namespace Casl.Tests;
 
 /// <summary>Deterministic random work items and rule sets for the equivalence and CASL compatibility tests.</summary>
 internal static class RandomRules

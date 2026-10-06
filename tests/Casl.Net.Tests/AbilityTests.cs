@@ -1,6 +1,6 @@
 using System.Text.Json.Nodes;
 
-namespace Msar.Authz.Tests;
+namespace Casl.Tests;
 
 public class AbilityTests
 {
@@ -79,7 +79,7 @@ public class AbilityTests
         AbilityBuilder builder = new AbilityBuilder(Registry)
             .Add(RawRule.Parse("""{ "action": "read", "subject": "WorkItem", "inverted": true, "conditions": { "assigneeId": "${user.id}" } }"""));
 
-        Assert.Throws<AuthzConfigurationException>(builder.Build);
+        Assert.Throws<CaslConfigurationException>(builder.Build);
     }
 
     [Fact]
@@ -158,7 +158,7 @@ public class AbilityTests
     public void Unsafe_or_invalid_conditions_are_rejected(string conditions, string message)
     {
         RawRule rule = RawRule.Can("read", "WorkItem", conditions);
-        AuthzConfigurationException ex = Assert.Throws<AuthzConfigurationException>(() => new AbilityBuilder(Registry).Add(rule).Build());
+        CaslConfigurationException ex = Assert.Throws<CaslConfigurationException>(() => new AbilityBuilder(Registry).Add(rule).Build());
         Assert.Contains(message, ex.Message);
     }
 

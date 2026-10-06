@@ -18,7 +18,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\src\Msar.Authz\Msar.Authz.csproj" />
+    <ProjectReference Include="..\..\src\Casl.Net\Casl.Net.csproj" />
   </ItemGroup>
 
 </Project>
