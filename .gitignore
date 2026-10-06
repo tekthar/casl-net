@@ -1,0 +1,8 @@
+bin/
+obj/
+*.user
+.vs/
+TestResults/
+node_modules/
+tests/casl-compat/fixture.json
+artifacts/

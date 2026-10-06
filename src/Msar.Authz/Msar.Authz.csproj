@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFrameworks>net8.0;net10.0</TargetFrameworks>
+    <Description>CASL-compatible authorization for .NET. One set of rules (MongoDB-style conditions, the format CASL uses) is checked against objects in memory, translated to SQL by EF Core through LINQ expressions, and can be sent to the browser for @casl/ability.</Description>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <NoWarn>$(NoWarn);CS1591</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <None Include="..\..\README.md" Pack="true" PackagePath="\" />
+    <InternalsVisibleTo Include="Msar.Authz.Tests" />
+  </ItemGroup>
+
+</Project>

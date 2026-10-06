@@ -1,0 +1,13 @@
+{
+  "name": "msar-authz-casl-compat",
+  "private": true,
+  "type": "module",
+  "description": "Checks that @casl/ability reaches the same decisions as Msar.Authz on the rules it exports.",
+  "scripts": {
+    "test": "node --test"
+  },
+  "devDependencies": {
+    "@casl/ability": "7.0.1",
+    "@msar/authz-casl": "file:../../packages/authz-casl"
+  }
+}

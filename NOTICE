@@ -1,0 +1,8 @@
+Msar.Authz
+Copyright 2026 Msar contributors
+
+Licensed under the Apache License, Version 2.0 (see LICENSE).
+
+Msar.Authz implements the rule format and semantics of CASL (https://github.com/stalniy/casl,
+MIT License, Copyright (c) 2017-present Sergii Stotskyi). No CASL source code is included in the
+.NET library. The @msar/authz-casl package depends on @casl/ability and @ucast/mongo2js at runtime.

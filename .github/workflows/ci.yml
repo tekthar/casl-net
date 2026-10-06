@@ -1,0 +1,32 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: |
+            8.0.x
+            10.0.x
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: dotnet build -c Release
+      - run: dotnet test -c Release --no-build
+      - name: CASL compatibility
+        working-directory: tests/casl-compat
+        run: |
+          npm ci || npm install
+          npm test
+      - run: dotnet pack src/Msar.Authz -c Release --no-build -o artifacts
+      - uses: actions/upload-artifact@v4
+        with:
+          name: packages
+          path: artifacts/*.nupkg
