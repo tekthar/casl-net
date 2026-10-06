@@ -4,17 +4,30 @@ using System.Reflection;
 namespace Casl;
 
 /// <summary>
-/// Maps subject names to CLR types and lists, per subject, which member paths rules may use in conditions
-/// and which fields field-level rules may name. Anything not listed is rejected: rule authors can't filter on
-/// <c>PasswordHash</c>, and a typo fails loudly instead of silently matching nothing.
+/// Maps subject names to CLR types.
+///
+/// A <b>strict</b> registry (<c>new SubjectRegistry().Add&lt;T&gt;(...)</c>) lists, per subject, which member paths
+/// rules may use in conditions and which fields field-level rules may name. Anything else is rejected: rule
+/// authors can't filter on <c>PasswordHash</c>, and a typo fails loudly. Use it when rules come from users.
+///
+/// An <b>open</b> registry (<see cref="Open"/>, the default when no registry is given) behaves like CASL:
+/// any subject name is accepted, an object's subject type is its class name, and conditions may use any public
+/// member. Use it when rules are written by developers.
 /// </summary>
 public sealed class SubjectRegistry
 {
     private readonly Dictionary<string, SubjectDefinition> _byName = new(StringComparer.Ordinal);
     private readonly Dictionary<Type, SubjectDefinition> _byType = [];
+    private readonly Dictionary<Type, SubjectDefinition> _openByType = [];
+    private readonly object _gate = new();
 
     public const string AllSubjects = "all";
     public const string AllActions = "manage";
+
+    /// <summary>A CASL-style registry: every subject name is valid and conditions may use any public member.</summary>
+    public static SubjectRegistry Open() => new() { IsOpen = true };
+
+    public bool IsOpen { get; private init; }
 
     public SubjectRegistry Add<T>(string name, Action<SubjectBuilder<T>>? configure = null)
     {
@@ -25,7 +38,7 @@ public sealed class SubjectRegistry
 
         SubjectBuilder<T> builder = new();
         configure?.Invoke(builder);
-        SubjectDefinition definition = new(name, typeof(T), builder.ConditionPaths, builder.FieldNames);
+        SubjectDefinition definition = new(name, typeof(T), builder.ConditionPaths, builder.FieldNames, allowAnyPath: IsOpen && builder.ConditionPaths.Count == 0);
         _byName.Add(name, definition);
         _byType.Add(typeof(T), definition);
         return this;
@@ -36,18 +49,57 @@ public sealed class SubjectRegistry
     public SubjectDefinition Get(string name) =>
         _byName.TryGetValue(name, out SubjectDefinition? d) ? d : throw new CaslConfigurationException($"Unknown subject '{name}'.");
 
-    public SubjectDefinition Get(Type type) =>
-        _byType.TryGetValue(type, out SubjectDefinition? d) ? d : throw new CaslConfigurationException($"Type '{type.Name}' is not a registered subject.");
+    public bool TryGet(string name, out SubjectDefinition? definition) => _byName.TryGetValue(name, out definition);
 
-    public bool IsKnown(string name) => name == AllSubjects || _byName.ContainsKey(name);
+    /// <summary>The definition for a CLR type: the registered one, or in an open registry one made on the fly.</summary>
+    public SubjectDefinition Get(Type type)
+    {
+        for (Type? t = type; t is not null; t = t.BaseType)
+        {
+            if (_byType.TryGetValue(t, out SubjectDefinition? registered))
+            {
+                return registered; // EF Core proxies derive from the entity type
+            }
+        }
+
+        if (!IsOpen)
+        {
+            throw new CaslConfigurationException($"Type '{type.Name}' is not a registered subject.");
+        }
+
+        lock (_gate)
+        {
+            if (!_openByType.TryGetValue(type, out SubjectDefinition? open))
+            {
+                open = new SubjectDefinition(type.Name, type, [], [], allowAnyPath: true);
+                _openByType[type] = open;
+            }
+
+            return open;
+        }
+    }
+
+    /// <summary>The definition to compile a rule on <paramref name="subjectName"/> against an object of <paramref name="type"/>.</summary>
+    internal SubjectDefinition For(string subjectName, Type type)
+    {
+        if (_byName.TryGetValue(subjectName, out SubjectDefinition? named) && named.Type.IsAssignableFrom(type))
+        {
+            return named;
+        }
+
+        return Get(type);
+    }
+
+    public bool IsKnown(string name) => IsOpen || name == AllSubjects || _byName.ContainsKey(name);
 }
 
 public sealed class SubjectDefinition
 {
-    internal SubjectDefinition(string name, Type type, IReadOnlyCollection<string> conditionPaths, IReadOnlyCollection<string> fields)
+    internal SubjectDefinition(string name, Type type, IReadOnlyCollection<string> conditionPaths, IReadOnlyCollection<string> fields, bool allowAnyPath)
     {
         Name = name;
         Type = type;
+        AllowAnyPath = allowAnyPath;
         ConditionPaths = new HashSet<string>(conditionPaths, StringComparer.Ordinal);
         Fields = fields.ToList();
         foreach (string path in ConditionPaths)
@@ -59,11 +111,16 @@ public sealed class SubjectDefinition
     public string Name { get; }
     public Type Type { get; }
 
+    /// <summary>True in an open registry: conditions may use any public member.</summary>
+    public bool AllowAnyPath { get; }
+
     /// <summary>Member paths (camelCase, dotted for navigations) allowed in conditions.</summary>
     public IReadOnlySet<string> ConditionPaths { get; }
 
     /// <summary>Fields that field-level rules may name; also the "all fields" set for permitted-field checks.</summary>
     public IReadOnlyList<string> Fields { get; }
+
+    internal bool Allows(string path) => AllowAnyPath || ConditionPaths.Contains(path);
 }
 
 public sealed class SubjectBuilder<T>
@@ -93,39 +150,49 @@ public sealed class SubjectBuilder<T>
     }
 }
 
-/// <summary>Resolves dotted camelCase paths ("project.orgUnitId") to CLR members.</summary>
+/// <summary>One step of a member path: a member, or a numeric index into a collection ("authors.0").</summary>
+internal readonly record struct PathSegment(string Name, MemberInfo? Member, int? Index, Type Type);
+
+/// <summary>Resolves dotted camelCase paths ("project.orgUnitId", "comments.authorId", "authors.0") to CLR members.</summary>
 internal static class MemberPath
 {
-    public static IReadOnlyList<MemberInfo> Resolve(Type root, string path)
+    public static IReadOnlyList<PathSegment> Resolve(Type root, string path)
     {
-        List<MemberInfo> members = [];
+        List<PathSegment> segments = [];
         Type current = root;
-        foreach (string segment in path.Split('.'))
+        foreach (string name in path.Split('.'))
         {
-            MemberInfo member = (MemberInfo?)current.GetProperty(segment, BindingFlags.Public | BindingFlags.Instance | BindingFlags.IgnoreCase)
-                ?? current.GetField(segment, BindingFlags.Public | BindingFlags.Instance | BindingFlags.IgnoreCase)
-                ?? throw new CaslConfigurationException($"'{root.Name}' has no member '{path}' (segment '{segment}').");
-            members.Add(member);
-            current = member is PropertyInfo p ? p.PropertyType : ((FieldInfo)member).FieldType;
-            current = ExpressionBuilder.ElementTypeOf(current) ?? current; // "comments.authorId" steps into the element
+            if (int.TryParse(name, out int index) && index >= 0 && ExpressionBuilder.ElementTypeOf(current) is { } element)
+            {
+                segments.Add(new PathSegment(name, null, index, element));
+                current = element;
+                continue;
+            }
+
+            Type lookup = ExpressionBuilder.ElementTypeOf(current) ?? current; // "comments.authorId" steps into the element
+            MemberInfo member = (MemberInfo?)lookup.GetProperty(name, BindingFlags.Public | BindingFlags.Instance | BindingFlags.IgnoreCase)
+                ?? lookup.GetField(name, BindingFlags.Public | BindingFlags.Instance | BindingFlags.IgnoreCase)
+                ?? throw new CaslConfigurationException($"'{root.Name}' has no member '{path}' (segment '{name}').");
+            current = TypeOf(member);
+            segments.Add(new PathSegment(name, member, null, current));
         }
 
-        return members;
+        return segments;
     }
 
     /// <summary>
     /// For a path that passes through a collection ("comments.authorId"), the collection part and the rest
     /// ("comments", "authorId"). MongoDB reads such a path as "any element matches". Null when there is none.
+    /// A numeric segment ("authors.0") is an index, not a pass-through.
     /// </summary>
     public static (string Collection, string Remainder)? SplitAtCollection(Type root, string path)
     {
-        string[] segments = path.Split('.');
-        IReadOnlyList<MemberInfo> members = Resolve(root, path);
-        for (int i = 0; i < members.Count - 1; i++)
+        IReadOnlyList<PathSegment> segments = Resolve(root, path);
+        for (int i = 0; i < segments.Count - 1; i++)
         {
-            if (ExpressionBuilder.ElementTypeOf(TypeOf(members[i])) is not null)
+            if (ExpressionBuilder.ElementTypeOf(segments[i].Type) is not null && segments[i + 1].Index is null)
             {
-                return (string.Join('.', segments[..(i + 1)]), string.Join('.', segments[(i + 1)..]));
+                return (string.Join('.', segments.Take(i + 1).Select(s => s.Name)), string.Join('.', segments.Skip(i + 1).Select(s => s.Name)));
             }
         }
 

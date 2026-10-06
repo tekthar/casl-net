@@ -4,7 +4,8 @@ Copyright 2026 CASL .NET contributors
 Licensed under the Apache License, Version 2.0 (see LICENSE).
 
 CASL .NET implements the rule format and semantics of CASL (https://github.com/stalniy/casl,
-MIT License, Copyright (c) 2017-present Sergii Stotskyi). No CASL source code is included in the
-.NET library. The casl-net package depends on @casl/ability and @ucast/mongo2js at runtime.
+MIT License, Copyright (c) 2017-present Sergii Stotskyi). Some files are translations of CASL source
+code and some tests are ported from CASL's specs; they are listed, with CASL's licence, in
+THIRD-PARTY-NOTICES.md. The casl-net package depends on @casl/ability and @ucast/mongo2js at runtime.
 
 CASL .NET is an independent community project. It is not affiliated with or endorsed by CASL or its author.

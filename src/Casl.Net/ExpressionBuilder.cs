@@ -24,6 +24,18 @@ internal sealed class ExpressionBuilder(SubjectDefinition subject, bool nullSafe
     private static readonly MethodInfo EnumerableContains = typeof(Enumerable).GetMethods()
         .Single(m => m.Name == nameof(Enumerable.Contains) && m.GetParameters().Length == 2);
 
+    private static readonly MethodInfo EnumerableCount = typeof(Enumerable).GetMethods()
+        .Single(m => m.Name == nameof(Enumerable.Count) && m.GetParameters().Length == 1);
+
+    private static readonly MethodInfo EnumerableElementAtOrDefault = typeof(Enumerable).GetMethods()
+        .Single(m => m.Name == nameof(Enumerable.ElementAtOrDefault) && m.GetParameters().Length == 2 && m.GetParameters()[1].ParameterType == typeof(int));
+
+    private static readonly MethodInfo RegexIsMatch = typeof(System.Text.RegularExpressions.Regex)
+        .GetMethod(nameof(System.Text.RegularExpressions.Regex.IsMatch), [typeof(string), typeof(string)])!;
+
+    private static readonly MethodInfo RegexIsMatchWithOptions = typeof(System.Text.RegularExpressions.Regex)
+        .GetMethod(nameof(System.Text.RegularExpressions.Regex.IsMatch), [typeof(string), typeof(string), typeof(System.Text.RegularExpressions.RegexOptions)])!;
+
     public Expression Build(Condition condition, Expression target, string pathPrefix = "") => condition switch
     {
         AndCondition and => and.Items.Select(i => Build(i, target, pathPrefix)).Aggregate(Expression.AndAlso),
@@ -54,6 +66,7 @@ internal sealed class ExpressionBuilder(SubjectDefinition subject, bool nullSafe
             return field.Operator switch
             {
                 "$exists" => Exists(member, memberType, field.Value!.GetValue<bool>()),
+                "$size" => Size(member, elementType, field.Value, fullPath),
                 "$ne" => Expression.Not(AnyOf(member, e, Compare(e, elementType, "$eq", field.Value, fullPath))),
                 "$nin" => Expression.Not(AnyOf(member, e, Compare(e, elementType, "$in", field.Value, fullPath))),
                 _ => AnyOf(member, e, Compare(e, elementType, field.Operator, field.Value, fullPath)),
@@ -87,6 +100,10 @@ internal sealed class ExpressionBuilder(SubjectDefinition subject, bool nullSafe
             case "$nin":
                 Expression contains = In(member, memberType, (JsonArray)value!, path);
                 return op == "$in" ? contains : Expression.Not(contains);
+            case "$regex":
+                return Regex(member, memberType, (JsonObject)value!, path);
+            case "$size":
+                throw new CaslConfigurationException($"'$size' needs a collection, but '{path}' is {memberType.Name}.");
             case "$gt" or "$gte" or "$lt" or "$lte":
                 Type core = Nullable.GetUnderlyingType(memberType) ?? memberType;
                 if (core == typeof(string) || core == typeof(bool) || core == typeof(Guid) || core.IsEnum)
@@ -123,6 +140,63 @@ internal sealed class ExpressionBuilder(SubjectDefinition subject, bool nullSafe
 
         Expression boxed = Box(list, listType);
         return Expression.Call(EnumerableContains.MakeGenericMethod(memberType), boxed, member);
+    }
+
+    private Expression Size(Expression collection, Type elementType, JsonNode? value, string path)
+    {
+        int size = value is JsonValue v && v.TryGetValue(out int n) && n >= 0
+            ? n
+            : throw new CaslConfigurationException($"'$size' on '{path}' needs a non-negative whole number.");
+        Expression count = Expression.Equal(Expression.Call(EnumerableCount.MakeGenericMethod(elementType), AsEnumerable(collection, elementType)), Box(size, typeof(int)));
+        return nullSafe ? Expression.AndAlso(Expression.NotEqual(collection, Expression.Constant(null, collection.Type)), count) : count;
+    }
+
+    /// <summary>
+    /// <c>{ $regex, $options }</c>. EF Core translates <c>Regex.IsMatch</c> on PostgreSQL and SQLite (options only on
+    /// PostgreSQL); other providers may not translate it.
+    /// </summary>
+    private Expression Regex(Expression member, Type memberType, JsonObject spec, string path)
+    {
+        if (memberType != typeof(string))
+        {
+            throw new CaslConfigurationException($"'$regex' needs text, but '{path}' is {memberType.Name}.");
+        }
+
+        string pattern = spec["pattern"]?.GetValue<string>() ?? throw new CaslConfigurationException($"'$regex' on '{path}' needs a pattern.");
+        string flags = spec["options"]?.GetValue<string>() ?? string.Empty;
+        try
+        {
+            _ = new System.Text.RegularExpressions.Regex(pattern);
+        }
+        catch (ArgumentException ex)
+        {
+            throw new CaslConfigurationException($"'$regex' on '{path}' is not a valid pattern: {ex.Message}");
+        }
+
+        System.Text.RegularExpressions.RegexOptions options = System.Text.RegularExpressions.RegexOptions.None;
+        foreach (char flag in flags)
+        {
+            options |= flag switch
+            {
+                'i' => System.Text.RegularExpressions.RegexOptions.IgnoreCase,
+                'm' => System.Text.RegularExpressions.RegexOptions.Multiline,
+                's' => System.Text.RegularExpressions.RegexOptions.Singleline,
+                'x' => System.Text.RegularExpressions.RegexOptions.IgnorePatternWhitespace,
+                _ => throw new CaslConfigurationException($"'$options' on '{path}' supports i, m, s and x, not '{flag}'."),
+            };
+        }
+
+        Expression match = options == System.Text.RegularExpressions.RegexOptions.None
+            ? Expression.Call(RegexIsMatch, member, Box(pattern, typeof(string)))
+            : Expression.Call(RegexIsMatchWithOptions, member, Box(pattern, typeof(string)), Expression.Constant(options));
+        // Also in SQL: without the guard, NULL REGEXP gives NULL, and NOT NULL stays NULL, so $nor would drop the row.
+        return Expression.AndAlso(Expression.NotEqual(member, Expression.Constant(null, typeof(string))), match);
+    }
+
+    private static Expression AsEnumerable(Expression collection, Type elementType)
+    {
+        Type enumerable = typeof(IEnumerable<>).MakeGenericType(elementType);
+        return collection.Type == enumerable ? collection : Expression.Convert(collection, enumerable);
     }
 
     private static Expression Exists(Expression member, Type memberType, bool exists)
@@ -169,8 +243,8 @@ internal sealed class ExpressionBuilder(SubjectDefinition subject, bool nullSafe
         Expression current = target;
         bool crossedNavigation = false;
         Expression? nullGuard = null;
-        IReadOnlyList<MemberInfo> members = MemberPath.Resolve(target.Type, path);
-        for (int i = 0; i < members.Count; i++)
+        IReadOnlyList<PathSegment> segments = MemberPath.Resolve(target.Type, path);
+        for (int i = 0; i < segments.Count; i++)
         {
             if (i > 0 && !current.Type.IsValueType)
             {
@@ -179,7 +253,13 @@ internal sealed class ExpressionBuilder(SubjectDefinition subject, bool nullSafe
                 nullGuard = nullGuard is null ? notNull : Expression.AndAlso(nullGuard, notNull);
             }
 
-            current = Expression.MakeMemberAccess(current, members[i]);
+            current = segments[i].Index is { } index
+                ? Expression.Call(EnumerableElementAtOrDefault.MakeGenericMethod(segments[i].Type), AsEnumerable(current, segments[i].Type), Expression.Constant(index))
+                : Expression.MakeMemberAccess(current, segments[i].Member!);
+            if (segments[i].Index is not null)
+            {
+                crossedNavigation = true; // an index past the end reads as missing
+            }
         }
 
         Type type = current.Type;
@@ -201,7 +281,7 @@ internal sealed class ExpressionBuilder(SubjectDefinition subject, bool nullSafe
 
     private void CheckAllowed(string fullPath)
     {
-        if (!subject.ConditionPaths.Contains(fullPath))
+        if (!subject.Allows(fullPath))
         {
             throw new CaslConfigurationException($"Conditions on '{subject.Name}.{fullPath}' are not allowed. Register the path with ConditionFields(\"{fullPath}\").");
         }

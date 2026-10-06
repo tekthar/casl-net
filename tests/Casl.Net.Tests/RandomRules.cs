@@ -61,7 +61,7 @@ internal static class RandomRules
 
     private static JsonObject Query(Random random, int depth)
     {
-        int pick = random.Next(depth < 1 ? 20 : 17);
+        int pick = random.Next(depth < 1 ? 23 : 20);
         string user = Users[random.Next(Users.Length)];
         string label = LabelPool[random.Next(LabelPool.Length)];
         return pick switch
@@ -83,8 +83,11 @@ internal static class RandomRules
             14 => Obj("labels", new JsonObject { ["$nin"] = new JsonArray(label) }),
             15 => Obj("comments", new JsonObject { ["$elemMatch"] = new JsonObject { ["authorId"] = user, ["internal"] = random.Next(2) == 0 } }),
             16 => Obj("dueAt", new JsonObject { ["$lt"] = "2026-06-01T00:00:00Z" }),
-            17 => new JsonObject { ["$or"] = new JsonArray(Query(random, depth + 1), Query(random, depth + 1)) },
-            18 => new JsonObject { ["$nor"] = new JsonArray(Query(random, depth + 1)) },
+            17 => Obj("labels", new JsonObject { ["$size"] = random.Next(3) }),
+            18 => Obj("summary", new JsonObject { ["$regex"] = random.Next(2) == 0 ? "^Item 1" : "[02468]$" }),
+            19 => Obj("assigneeId", new JsonObject { ["$regex"] = "[12]$" }),
+            20 => new JsonObject { ["$or"] = new JsonArray(Query(random, depth + 1), Query(random, depth + 1)) },
+            21 => new JsonObject { ["$nor"] = new JsonArray(Query(random, depth + 1)) },
             _ => Merge(Query(random, depth + 1), Query(random, depth + 1)),
         };
     }

@@ -92,6 +92,19 @@ internal static class ConditionParser
                 case "$not" when value is JsonObject inner && inner.All(p => p.Key.StartsWith('$')):
                     items.Add(new NotCondition(ParseOperators(path, inner)));
                     break;
+                case "$size":
+                    items.Add(new FieldCondition(path, op, value?.DeepClone()));
+                    break;
+                case "$regex" when value is JsonValue pattern && pattern.TryGetValue(out string? regex):
+                    // $options travels with its $regex, as in MongoDB.
+                    items.Add(new FieldCondition(path, "$regex", new JsonObject
+                    {
+                        ["pattern"] = regex,
+                        ["options"] = operators["$options"]?.GetValue<string>() ?? string.Empty,
+                    }));
+                    break;
+                case "$options" when operators.ContainsKey("$regex"):
+                    break;
                 case "$all" when value is JsonArray all:
                     // "contains every value": one equality per value on the collection
                     items.Add(new AndCondition(all.Select(v => (Condition)new FieldCondition(path, "$eq", v?.DeepClone())).ToList()));
@@ -102,7 +115,7 @@ internal static class ConditionParser
                         : ParseQuery(inner)));
                     break;
                 default:
-                    throw new CaslConfigurationException($"Operator '{op}' on '{path}' is not supported. Supported: $eq $ne $gt $gte $lt $lte $in $nin $exists $not $all $elemMatch $and $or $nor.");
+                    throw new CaslConfigurationException($"Operator '{op}' on '{path}' is not supported. Supported: $eq $ne $gt $gte $lt $lte $in $nin $exists $not $all $size $regex $options $elemMatch $and $or $nor.");
             }
         }
 

@@ -38,14 +38,14 @@ public sealed class EquivalenceTests(ITestOutputHelper output) : IDisposable
         for (int i = 0; i < 400; i++)
         {
             List<RawRule> rules = RandomRules.RuleSet(random);
-            Ability ability = new AbilityBuilder(registry).AddRange(rules).Build();
+            Ability ability = new AbilityBuilder(registry, OptionsFor(i)).AddRange(rules).Build();
             foreach (string action in new[] { "read", "update" })
             {
                 List<int> fromDatabase = await db.WorkItems.AccessibleBy(ability, action).Select(w => w.Id).OrderBy(id => id).ToListAsync();
                 List<int> inMemory = all.Where(w => ability.Can(action, w)).Select(w => w.Id).OrderBy(id => id).ToList();
                 if (!fromDatabase.SequenceEqual(inMemory))
                 {
-                    output.WriteLine(JsonSerializer.Serialize(rules));
+                    output.WriteLine($"{ability.Options.Semantics}: {JsonSerializer.Serialize(rules)}");
                     output.WriteLine($"database only: {string.Join(',', fromDatabase.Except(inMemory))}; memory only: {string.Join(',', inMemory.Except(fromDatabase))}");
                 }
 
@@ -82,7 +82,7 @@ public sealed class EquivalenceTests(ITestOutputHelper output) : IDisposable
         JsonArray cases = [];
         for (int i = 0; i < 150; i++)
         {
-            Ability ability = new AbilityBuilder(registry).AddRange(RandomRules.RuleSet(random)).Build();
+            Ability ability = new AbilityBuilder(registry, OptionsFor(i)).AddRange(RandomRules.RuleSet(random)).Build();
             JsonArray checks = [];
             for (int index = 0; index < items.Count; index++)
             {
@@ -110,6 +110,10 @@ public sealed class EquivalenceTests(ITestOutputHelper output) : IDisposable
         File.WriteAllText(path, fixture.ToJsonString(new JsonSerializerOptions { WriteIndented = false }));
         output.WriteLine($"Wrote {cases.Count} cases to {path}");
     }
+
+    // Even runs use CASL's "last rule wins", odd runs deny-overrides.
+    private static AbilityOptions OptionsFor(int run) =>
+        new() { Semantics = run % 2 == 0 ? RuleSemantics.Casl : RuleSemantics.DenyOverrides };
 
     public void Dispose() => _connection.Dispose();
 

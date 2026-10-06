@@ -15,8 +15,8 @@ public sealed record RawRule
     /// <summary>One or more actions. <c>manage</c> means every action.</summary>
     public required IReadOnlyList<string> Action { get; init; }
 
-    /// <summary>One or more subject names. <c>all</c> means every subject.</summary>
-    public required IReadOnlyList<string> Subject { get; init; }
+    /// <summary>One or more subject names. <c>all</c> means every subject; no subject makes a claim rule (subject <c>all</c>).</summary>
+    public IReadOnlyList<string>? Subject { get; init; }
 
     /// <summary>MongoDB-style query; null means the rule applies to every instance.</summary>
     public JsonObject? Conditions { get; init; }
@@ -30,11 +30,11 @@ public sealed record RawRule
     /// <summary>Shown to the user when this rule denies access.</summary>
     public string? Reason { get; init; }
 
-    public static RawRule Can(string action, string subject, object? conditions = null, IReadOnlyList<string>? fields = null) =>
-        new() { Action = [action], Subject = [subject], Conditions = ToConditions(conditions), Fields = fields };
+    public static RawRule Can(string action, string? subject = null, object? conditions = null, IReadOnlyList<string>? fields = null) =>
+        new() { Action = [action], Subject = subject is null ? null : [subject], Conditions = ToConditions(conditions), Fields = fields };
 
-    public static RawRule Cannot(string action, string subject, object? conditions = null, IReadOnlyList<string>? fields = null, string? reason = null) =>
-        new() { Action = [action], Subject = [subject], Conditions = ToConditions(conditions), Fields = fields, Inverted = true, Reason = reason };
+    public static RawRule Cannot(string action, string? subject = null, object? conditions = null, IReadOnlyList<string>? fields = null, string? reason = null) =>
+        new() { Action = [action], Subject = subject is null ? null : [subject], Conditions = ToConditions(conditions), Fields = fields, Inverted = true, Reason = reason };
 
     /// <summary>Parses a JSON array of raw rules.</summary>
     public static IReadOnlyList<RawRule> ParseMany(string json) =>
@@ -45,7 +45,7 @@ public sealed record RawRule
 
     public string ToJson() => JsonSerializer.Serialize(this);
 
-    private static JsonObject? ToConditions(object? conditions) => conditions switch
+    internal static JsonObject? ToConditions(object? conditions) => conditions switch
     {
         null => null,
         JsonObject o => o,
@@ -62,7 +62,7 @@ internal sealed class RawRuleJsonConverter : JsonConverter<RawRule>
         return new RawRule
         {
             Action = StringOrArray(obj["action"], "action") ?? throw new JsonException("A rule needs an 'action'."),
-            Subject = StringOrArray(obj["subject"], "subject") ?? throw new JsonException("A rule needs a 'subject'."),
+            Subject = StringOrArray(obj["subject"], "subject"),
             Conditions = obj["conditions"] is JsonObject c ? (JsonObject)c.DeepClone() : null,
             Fields = StringOrArray(obj["fields"], "fields"),
             Inverted = obj["inverted"]?.GetValue<bool>() ?? false,
@@ -75,8 +75,11 @@ internal sealed class RawRuleJsonConverter : JsonConverter<RawRule>
         JsonObject obj = new()
         {
             ["action"] = value.Action.Count == 1 ? value.Action[0] : new JsonArray(value.Action.Select(a => (JsonNode?)a).ToArray()),
-            ["subject"] = value.Subject.Count == 1 ? value.Subject[0] : new JsonArray(value.Subject.Select(s => (JsonNode?)s).ToArray()),
         };
+        if (value.Subject is { Count: > 0 } subjects)
+        {
+            obj["subject"] = subjects.Count == 1 ? subjects[0] : new JsonArray(subjects.Select(s => (JsonNode?)s).ToArray());
+        }
         if (value.Conditions is not null)
         {
             obj["conditions"] = value.Conditions.DeepClone();

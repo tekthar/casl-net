@@ -50,7 +50,7 @@ public static class Subjects
 {
     public static SubjectRegistry Create() => new SubjectRegistry()
         .Add<WorkItem>("WorkItem", s => s
-            .ConditionFields("id", "projectId", "assigneeId", "status", "priority", "dueAt", "labels",
+            .ConditionFields("id", "summary", "projectId", "assigneeId", "status", "priority", "dueAt", "labels",
                 "project.orgUnitId", "project.archived", "comments", "comments.authorId", "comments.internal")
             .Fields("summary", "status", "assigneeId", "priority", "labels"))
         .Add<Project>("Project", s => s.ConditionFields("id", "orgUnitId", "archived").Fields("name"));

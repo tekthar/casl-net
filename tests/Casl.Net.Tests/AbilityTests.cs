@@ -20,14 +20,33 @@ public class AbilityTests
         Assert.True(ability.Can("update", "WorkItem"));
     }
 
+    private static readonly AbilityOptions DenyOverrides = new() { Semantics = RuleSemantics.DenyOverrides };
+
     [Fact]
-    public void Deny_overrides_allow_whatever_the_order()
+    public void By_default_the_last_matching_rule_wins()
     {
         Ability denyLast = new AbilityBuilder(Registry)
             .Can("read", "WorkItem")
             .Cannot("read", "WorkItem", new { status = "Done" })
             .Build();
         Ability denyFirst = new AbilityBuilder(Registry)
+            .Cannot("read", "WorkItem", new { status = "Done" })
+            .Can("read", "WorkItem")
+            .Build();
+
+        Assert.False(denyLast.Can("read", Item(status: WorkStatus.Done)));
+        Assert.True(denyFirst.Can("read", Item(status: WorkStatus.Done)));
+        Assert.True(denyFirst.Can("read", Item(status: WorkStatus.Open)));
+    }
+
+    [Fact]
+    public void Deny_overrides_allow_whatever_the_order()
+    {
+        Ability denyLast = new AbilityBuilder(Registry, DenyOverrides)
+            .Can("read", "WorkItem")
+            .Cannot("read", "WorkItem", new { status = "Done" })
+            .Build();
+        Ability denyFirst = new AbilityBuilder(Registry, DenyOverrides)
             .Cannot("read", "WorkItem", new { status = "Done" })
             .Can("read", "WorkItem")
             .Build();
@@ -151,7 +170,9 @@ public class AbilityTests
 
     [Theory]
     [InlineData("""{ "passwordHash": "x" }""", "not allowed")]
-    [InlineData("""{ "priority": { "$regex": "x" } }""", "not supported")]
+    [InlineData("""{ "priority": { "$where": "x" } }""", "not supported")]
+    [InlineData("""{ "priority": { "$regex": "x" } }""", "needs text")]
+    [InlineData("""{ "summary": { "$size": 1 } }""", "needs a collection")]
     [InlineData("""{ "status": { "$gt": "Open" } }""", "isn't supported")]
     [InlineData("""{ "priority": "high" }""", "can't be used as Int32")]
     [InlineData("""{ "project": { "id": 1 } }""", "dotted paths")]
@@ -185,7 +206,7 @@ public class AbilityTests
     }
 
     [Fact]
-    public void Casl_export_puts_deny_rules_last()
+    public void Casl_export_keeps_the_order_by_default()
     {
         Ability ability = new AbilityBuilder(Registry)
             .Cannot("read", "WorkItem", new { status = "Done" })
@@ -193,7 +214,39 @@ public class AbilityTests
             .Build();
 
         IReadOnlyList<RawRule> rules = ability.ToCaslRules();
+        Assert.True(rules[0].Inverted);
+        Assert.False(rules[1].Inverted);
+    }
+
+    [Fact]
+    public void Casl_export_puts_deny_rules_last_with_deny_overrides()
+    {
+        Ability ability = new AbilityBuilder(Registry, DenyOverrides)
+            .Cannot("read", "WorkItem", new { status = "Done" })
+            .Can("read", "WorkItem")
+            .Build();
+
+        IReadOnlyList<RawRule> rules = ability.ToCaslRules();
         Assert.False(rules[0].Inverted);
         Assert.True(rules[1].Inverted);
+    }
+
+    private sealed record BlogPost(int AuthorId, bool Published);
+
+    [Fact]
+    public void Readme_casl_style_quick_start()
+    {
+        var user = new { Id = 7 };
+        Ability ability = new AbilityBuilder()
+            .Can("read", "BlogPost")
+            .Can("update", "BlogPost", new { authorId = user.Id })
+            .Cannot("delete", "BlogPost", new { published = true }).Because("Published posts can't be deleted")
+            .Build();
+
+        Assert.True(ability.Can("update", new BlogPost(7, false)));
+        Assert.False(ability.Can("update", new BlogPost(8, false)));
+        Assert.False(ability.Can("delete", "BlogPost"));
+        Assert.Equal("Published posts can't be deleted",
+            Assert.Throws<ForbiddenException>(() => ability.EnsureCan("delete", new BlogPost(7, true))).Message);
     }
 }

@@ -4,14 +4,36 @@ using System.Text.Json.Nodes;
 namespace Casl;
 
 /// <summary>
-/// Collects rules (from code, from a database, from role grants), fills in placeholders and validates
-/// every rule against the subject registry before handing out an <see cref="Ability"/>.
-/// Invalid rules fail the build instead of being skipped, because skipping a deny rule would widen access.
+/// Collects rules (from code, from a database, from role grants), fills in placeholders and validates them before
+/// handing out an <see cref="Ability"/>. Invalid rules fail the build instead of being skipped, because skipping a
+/// <c>cannot</c> rule would widen access.
 /// </summary>
-public sealed class AbilityBuilder(SubjectRegistry subjects)
+public sealed class AbilityBuilder
 {
+    private readonly SubjectRegistry _subjects;
+    private readonly AbilityOptions _options;
     private readonly VariableScope _variables = new();
-    private readonly List<(RawRule Rule, object? Variables)> _rules = [];
+    private readonly List<Entry> _rules = [];
+
+    /// <summary>A builder with an open registry and CASL semantics, like CASL's <c>AbilityBuilder(createMongoAbility)</c>.</summary>
+    public AbilityBuilder()
+        : this(SubjectRegistry.Open())
+    {
+    }
+
+    public AbilityBuilder(AbilityOptions options)
+        : this(SubjectRegistry.Open(), options)
+    {
+    }
+
+    public AbilityBuilder(SubjectRegistry subjects, AbilityOptions? options = null)
+    {
+        _subjects = subjects;
+        _options = options ?? AbilityOptions.Default;
+    }
+
+    /// <summary>The rules added so far, in order, before placeholders are filled in.</summary>
+    public IReadOnlyList<RawRule> Rules => _rules.Select(e => e.Rule).ToList();
 
     /// <summary>Variables every rule can use, e.g. <c>new { user = new { id, groupIds } }</c>.</summary>
     public AbilityBuilder WithVariables(object variables)
@@ -23,7 +45,7 @@ public sealed class AbilityBuilder(SubjectRegistry subjects)
     /// <summary>Adds a rule. <paramref name="variables"/> apply to this rule only, e.g. a grant's scope.</summary>
     public AbilityBuilder Add(RawRule rule, object? variables = null)
     {
-        _rules.Add((rule, variables));
+        _rules.Add(new Entry(rule, variables));
         return this;
     }
 
@@ -37,35 +59,73 @@ public sealed class AbilityBuilder(SubjectRegistry subjects)
         return this;
     }
 
-    public AbilityBuilder Can(string action, string subject, object? conditions = null, params string[] fields) =>
-        Add(RawRule.Can(action, subject, conditions, fields.Length == 0 ? null : fields));
+    /// <summary>Allows <paramref name="action"/> on <paramref name="subject"/> (a claim rule when null).</summary>
+    public RuleBuilder Can(string action, string? subject = null, object? conditions = null, params string[] fields) =>
+        AddRule([action], subject is null ? null : [subject], conditions, fields, inverted: false, reason: null);
 
-    public AbilityBuilder Cannot(string action, string subject, object? conditions = null, string? reason = null, params string[] fields) =>
-        Add(RawRule.Cannot(action, subject, conditions, fields.Length == 0 ? null : fields, reason));
+    /// <summary>Allows several actions on several subjects in one rule.</summary>
+    public RuleBuilder Can(IReadOnlyList<string> actions, IReadOnlyList<string>? subjects, object? conditions = null, params string[] fields) =>
+        AddRule(actions, subjects, conditions, fields, inverted: false, reason: null);
+
+    /// <summary>Forbids <paramref name="action"/> on <paramref name="subject"/>; <paramref name="reason"/> becomes the error message.</summary>
+    public RuleBuilder Cannot(string action, string? subject = null, object? conditions = null, string? reason = null, params string[] fields) =>
+        AddRule([action], subject is null ? null : [subject], conditions, fields, inverted: true, reason);
+
+    public RuleBuilder Cannot(IReadOnlyList<string> actions, IReadOnlyList<string>? subjects, object? conditions = null, string? reason = null, params string[] fields) =>
+        AddRule(actions, subjects, conditions, fields, inverted: true, reason);
+
+    /// <summary>Allows <paramref name="action"/> on the subject registered for <typeparamref name="TSubject"/> (its class name in an open registry).</summary>
+    public RuleBuilder Can<TSubject>(string action, object? conditions = null, params string[] fields) =>
+        Can(action, _subjects.Get(typeof(TSubject)).Name, conditions, fields);
+
+    public RuleBuilder Cannot<TSubject>(string action, object? conditions = null, string? reason = null, params string[] fields) =>
+        Cannot(action, _subjects.Get(typeof(TSubject)).Name, conditions, reason, fields);
+
+    private RuleBuilder AddRule(IReadOnlyList<string> actions, IReadOnlyList<string>? subjects, object? conditions, string[] fields, bool inverted, string? reason)
+    {
+        RawRule rule = new()
+        {
+            Action = actions,
+            Subject = subjects,
+            Conditions = RawRule.ToConditions(conditions),
+            Fields = fields.Length == 0 ? null : fields,
+            Inverted = inverted,
+            Reason = reason,
+        };
+        _rules.Add(new Entry(rule, null));
+        return new RuleBuilder(this, _rules.Count - 1);
+    }
+
+    internal void Update(int index, Func<RawRule, RawRule> change) =>
+        _rules[index] = _rules[index] with { Rule = change(_rules[index].Rule) };
 
     public Ability Build()
     {
-        List<CompiledRule> compiled = [];
-        foreach ((RawRule rule, object? ruleVariables) in _rules)
+        ActionAliases? aliases = _options.Aliases;
+        List<Rule> rules = new(_rules.Count);
+        for (int i = 0; i < _rules.Count; i++)
         {
+            (RawRule rule, object? ruleVariables) = _rules[i];
             VariableScope scope = _variables.With(ruleVariables);
             JsonObject? conditions = rule.Conditions is null ? null : Placeholders.Interpolate(rule.Conditions, scope.Resolve);
             RawRule interpolated = rule with { Conditions = conditions };
-            compiled.Add(Compile(interpolated, subjects, validateValues: true));
+            Condition? condition = Check(interpolated, _subjects, _options, validateValues: true);
+            IReadOnlyList<string> actions = aliases is null ? interpolated.Action : aliases.Expand(interpolated.Action);
+            rules.Add(new Rule(interpolated, actions, interpolated.Subject is { Count: > 0 } s ? s : [_options.AnySubjectType], condition, priority: i));
         }
 
-        return new Ability(subjects, compiled);
+        return new Ability(_subjects, _options, rules);
     }
 
     /// <summary>
     /// Checks a rule before it is saved, e.g. from an admin screen. Placeholders are allowed and not filled in.
     /// Returns the problems found; an empty list means the rule is valid.
     /// </summary>
-    public static IReadOnlyList<string> Validate(RawRule rule, SubjectRegistry subjects)
+    public static IReadOnlyList<string> Validate(RawRule rule, SubjectRegistry subjects, AbilityOptions? options = null)
     {
         try
         {
-            _ = Compile(rule, subjects, validateValues: false);
+            _ = Check(rule, subjects, options ?? AbilityOptions.Default, validateValues: false);
             return [];
         }
         catch (CaslConfigurationException ex)
@@ -74,40 +134,55 @@ public sealed class AbilityBuilder(SubjectRegistry subjects)
         }
     }
 
-    internal static CompiledRule Compile(RawRule rule, SubjectRegistry subjects, bool validateValues)
+    /// <summary>Parses the rule's conditions and checks it against the registry; returns the parsed condition.</summary>
+    internal static Condition? Check(RawRule rule, SubjectRegistry subjects, AbilityOptions options, bool validateValues)
     {
         if (rule.Action.Count == 0 || rule.Action.Any(string.IsNullOrWhiteSpace))
         {
             throw new CaslConfigurationException("A rule needs at least one action.");
         }
 
-        foreach (string subject in rule.Subject)
+        if (rule.Fields is { Count: 0 })
         {
-            if (!subjects.IsKnown(subject))
+            throw new CaslConfigurationException("The `rawRule.fields` array cannot be empty.");
+        }
+
+        IReadOnlyList<string> subjectNames = rule.Subject is { Count: > 0 } s ? s : [options.AnySubjectType];
+        foreach (string subject in subjectNames)
+        {
+            if (subject != options.AnySubjectType && !subjects.IsKnown(subject))
             {
                 throw new CaslConfigurationException($"Unknown subject '{subject}'.");
             }
         }
 
         Condition? condition = rule.Conditions is { Count: > 0 } c ? ConditionParser.Parse(c) : null;
-        foreach (string subjectName in rule.Subject)
+        foreach (string subjectName in subjectNames)
         {
-            if (subjectName == SubjectRegistry.AllSubjects)
+            if (subjectName == options.AnySubjectType)
             {
-                if (condition is not null || rule.Fields is not null)
+                if (!subjects.IsOpen && (condition is not null || rule.Fields is not null))
                 {
-                    throw new CaslConfigurationException("Rules on 'all' can't have conditions or fields; name the subjects instead.");
+                    // A strict registry can't check conditions or fields without knowing the subject's type.
+                    throw new CaslConfigurationException($"Rules on '{options.AnySubjectType}' can't have conditions or fields; name the subjects instead.");
                 }
 
                 continue;
             }
 
-            SubjectDefinition definition = subjects.Get(subjectName);
-            foreach (string field in rule.Fields ?? [])
+            if (!subjects.TryGet(subjectName, out SubjectDefinition? definition))
             {
-                if (!definition.Fields.Contains(field))
+                continue; // open registry, unregistered name: checked when an object is matched
+            }
+
+            if (!definition!.AllowAnyPath || definition.Fields.Count > 0)
+            {
+                foreach (string field in rule.Fields ?? [])
                 {
-                    throw new CaslConfigurationException($"'{subjectName}' has no field '{field}' for field-level rules.");
+                    if (!field.Contains('*') && !definition.Fields.Contains(field))
+                    {
+                        throw new CaslConfigurationException($"'{subjectName}' has no field '{field}' for field-level rules.");
+                    }
                 }
             }
 
@@ -119,7 +194,7 @@ public sealed class AbilityBuilder(SubjectRegistry subjects)
             }
         }
 
-        return new CompiledRule(rule, [.. rule.Action], [.. rule.Subject], condition);
+        return condition;
     }
 
     // Placeholders can't be type-checked before they're filled in; check paths and operators only.
@@ -133,4 +208,64 @@ public sealed class AbilityBuilder(SubjectRegistry subjects)
             new FieldCondition(f.Path, "$exists", JsonValue.Create(true)),
         _ => condition,
     };
+
+    private sealed record Entry(RawRule Rule, object? Variables);
+}
+
+/// <summary>Returned by <see cref="AbilityBuilder.Can(string, string?, object?, string[])"/> to refine the rule just added.</summary>
+public sealed class RuleBuilder
+{
+    private readonly AbilityBuilder _builder;
+    private readonly int _index;
+
+    internal RuleBuilder(AbilityBuilder builder, int index)
+    {
+        _builder = builder;
+        _index = index;
+    }
+
+    /// <summary>The rule as it stands.</summary>
+    public RawRule Rule => _builder.Rules[_index];
+
+    /// <summary>Limits the rule to instances matching a MongoDB-style query.</summary>
+    public RuleBuilder Where(object conditions)
+    {
+        _builder.Update(_index, r => r with { Conditions = RawRule.ToConditions(conditions) });
+        return this;
+    }
+
+    /// <summary>Limits the rule to fields (wildcards allowed: <c>author.*</c>, <c>**.name</c>).</summary>
+    public RuleBuilder OnFields(params string[] fields)
+    {
+        _builder.Update(_index, r => r with { Fields = fields });
+        return this;
+    }
+
+    /// <summary>The message shown when this rule denies access.</summary>
+    public RuleBuilder Because(string reason)
+    {
+        _builder.Update(_index, r => r with { Reason = reason });
+        return this;
+    }
+
+    public RuleBuilder Can(string action, string? subject = null, object? conditions = null, params string[] fields) =>
+        _builder.Can(action, subject, conditions, fields);
+
+    public RuleBuilder Cannot(string action, string? subject = null, object? conditions = null, string? reason = null, params string[] fields) =>
+        _builder.Cannot(action, subject, conditions, reason, fields);
+
+    public RuleBuilder Can<TSubject>(string action, object? conditions = null, params string[] fields) =>
+        _builder.Can<TSubject>(action, conditions, fields);
+
+    public RuleBuilder Cannot<TSubject>(string action, object? conditions = null, string? reason = null, params string[] fields) =>
+        _builder.Cannot<TSubject>(action, conditions, reason, fields);
+
+    public AbilityBuilder Add(RawRule rule, object? variables = null) => _builder.Add(rule, variables);
+
+    public AbilityBuilder AddRange(IEnumerable<RawRule> rules, object? variables = null) => _builder.AddRange(rules, variables);
+
+    public Ability Build() => _builder.Build();
+
+    /// <summary>Lets a <see cref="RuleBuilder"/> stand in for its builder: <c>AbilityBuilder b = builder.Can(...)</c>.</summary>
+    public static implicit operator AbilityBuilder(RuleBuilder rule) => rule._builder;
 }
