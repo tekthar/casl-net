@@ -179,7 +179,8 @@ public sealed class AbilityBuilder
             {
                 foreach (string field in rule.Fields ?? [])
                 {
-                    if (!field.Contains('*') && !definition.Fields.Contains(field))
+                    if (!field.Contains('*') && !definition.Fields.Contains(field)
+                        && !definition.Fields.Any(f => f.EndsWith(".**", StringComparison.Ordinal) && field.StartsWith(f[..^2], StringComparison.Ordinal)))
                     {
                         throw new CaslConfigurationException($"'{subjectName}' has no field '{field}' for field-level rules.");
                     }

@@ -142,7 +142,10 @@ public sealed class SubjectBuilder<T>
         return this;
     }
 
-    /// <summary>Fields that field-level rules can grant or deny, e.g. "summary", "status".</summary>
+    /// <summary>
+    /// Fields that field-level rules can grant or deny, e.g. "summary", "status". A family ending in ".**", such as
+    /// "fields.**", accepts every field under it ("fields.custom.cost"), for fields declared at run time.
+    /// </summary>
     public SubjectBuilder<T> Fields(params string[] fields)
     {
         FieldNames.AddRange(fields);

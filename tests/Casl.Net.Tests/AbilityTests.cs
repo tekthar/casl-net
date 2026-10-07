@@ -81,6 +81,17 @@ public class AbilityTests
     }
 
     [Fact]
+    public void A_field_family_accepts_fields_declared_later()
+    {
+        SubjectRegistry registry = new SubjectRegistry().Add<WorkItem>("WorkItem", s => s.ConditionFields("status").Fields("title", "fields.**"));
+
+        Ability ability = new AbilityBuilder(registry).Can("read", "WorkItem", fields: "fields.custom.cost").Build();
+
+        Assert.True(ability.Can("read", "WorkItem", "fields.custom.cost"));
+        Assert.Throws<CaslConfigurationException>(() => new AbilityBuilder(registry).Can("read", "WorkItem", fields: "cost").Build());
+    }
+
+    [Fact]
     public void Manage_and_all_cover_everything()
     {
         Ability ability = new AbilityBuilder(Registry).Can("manage", "all").Build();
