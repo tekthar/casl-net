@@ -13,7 +13,7 @@ namespace Casl;
 ///
 /// By default rules combine as in CASL (<see cref="RuleSemantics.Casl"/>): the last rule that matches wins.
 /// With <see cref="RuleSemantics.DenyOverrides"/>, any matching <c>cannot</c> rule wins regardless of order.
-/// Either way the same decision is made in memory (<see cref="Can"/>), in SQL (<see cref="Filter{T}"/>) and,
+/// Either way the same decision is made in memory (<see cref="Can(string, object?, string?)"/>), in SQL (<see cref="Filter{T}"/>) and,
 /// through <see cref="ToCaslRules"/>, in the browser by @casl/ability.
 /// </summary>
 public sealed class Ability
@@ -52,16 +52,33 @@ public sealed class Ability
     public bool Can(string action, object? subject = null, string? field = null) =>
         RelevantRuleFor(action, subject, field) is { Inverted: false };
 
+    /// <summary>
+    /// Like <see cref="Can(string, object?, string?)"/>, but with <see cref="FieldMatch.Named"/> only allow rules that list
+    /// fields (and match <paramref name="field"/>) grant access: rules without a field list don't reach the field. Denies
+    /// count either way. For fields that must be granted by name, such as a salary or a cost.
+    /// </summary>
+    public bool Can(string action, object? subject, string field, FieldMatch match) =>
+        RelevantRuleFor(action, subject, field, match) is { Inverted: false };
+
     public bool Cannot(string action, object? subject = null, string? field = null) => !Can(action, subject, field);
 
     /// <summary>The rule that decides the check, or null when no rule matches (which means "no").</summary>
-    public Rule? RelevantRuleFor(string action, object? subject = null, string? field = null)
+    public Rule? RelevantRuleFor(string action, object? subject = null, string? field = null) =>
+        RelevantRuleFor(action, subject, field, FieldMatch.Any);
+
+    /// <summary>The rule that decides the check; with <see cref="FieldMatch.Named"/>, allow rules without fields are skipped.</summary>
+    public Rule? RelevantRuleFor(string action, object? subject, string? field, FieldMatch match)
     {
         string subjectType = DetectSubjectType(subject);
         object? instance = InstanceOf(subject);
         Rule? allow = null;
         foreach (Rule rule in RulesFor(action, subjectType, field))
         {
+            if (match == FieldMatch.Named && !rule.Inverted && rule.Fields is not { Count: > 0 })
+            {
+                continue;
+            }
+
             if (!Matches(rule, subjectType, instance))
             {
                 continue;
@@ -490,6 +507,16 @@ public sealed class ForbiddenException : Exception
     public override string Message => _message;
 
     internal void SetMessage(string message) => _message = message;
+}
+
+/// <summary>Which allow rules can grant a field.</summary>
+public enum FieldMatch
+{
+    /// <summary>Any matching rule: one without a field list covers every field (CASL's behaviour).</summary>
+    Any,
+
+    /// <summary>Only rules that list the field (or a pattern matching it).</summary>
+    Named,
 }
 
 public static class QueryableCaslExtensions

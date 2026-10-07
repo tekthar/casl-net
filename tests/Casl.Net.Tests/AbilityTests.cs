@@ -59,6 +59,28 @@ public class AbilityTests
     }
 
     [Fact]
+    public void Named_fields_are_granted_only_by_rules_that_name_them()
+    {
+        Ability member = new AbilityBuilder(Registry, DenyOverrides).Can("read", "WorkItem").Build();
+        Ability finance = new AbilityBuilder(Registry, DenyOverrides)
+            .Can("read", "WorkItem")
+            .Can("read", "WorkItem", fields: "cost.*")
+            .Build();
+        Ability denied = new AbilityBuilder(Registry, DenyOverrides)
+            .Can("read", "WorkItem", fields: "cost.*")
+            .Cannot("read", "WorkItem", new { status = "Done" })
+            .Build();
+
+        Assert.True(member.Can("read", Item(), "cost.total"));
+        Assert.False(member.Can("read", Item(), "cost.total", FieldMatch.Named));
+        Assert.True(finance.Can("read", Item(), "cost.total", FieldMatch.Named));
+        Assert.True(finance.Can("read", Item(), "title", FieldMatch.Any));
+        Assert.False(finance.Can("read", Item(), "title", FieldMatch.Named));
+        Assert.True(denied.Can("read", Item(status: WorkStatus.Open), "cost.total", FieldMatch.Named));
+        Assert.False(denied.Can("read", Item(status: WorkStatus.Done), "cost.total", FieldMatch.Named));
+    }
+
+    [Fact]
     public void Manage_and_all_cover_everything()
     {
         Ability ability = new AbilityBuilder(Registry).Can("manage", "all").Build();
