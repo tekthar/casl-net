@@ -37,6 +37,7 @@ public sealed class Ability
         _actionsBySubject = IndexActions(_byPriority);
     }
 
+    /// <summary>The options the ability was built with: rule semantics, aliases, the any-action and any-subject names.</summary>
     public AbilityOptions Options => _options;
 
     /// <summary>The rules with placeholders filled in, in the order they were added.</summary>
@@ -60,6 +61,7 @@ public sealed class Ability
     public bool Can(string action, object? subject, string field, FieldMatch match) =>
         RelevantRuleFor(action, subject, field, match) is { Inverted: false };
 
+    /// <summary>The opposite of <see cref="Can(string, object?, string?)"/>: true when no rule allows the action.</summary>
     public bool Cannot(string action, object? subject = null, string? field = null) => !Can(action, subject, field);
 
     /// <summary>The rule that decides the check, or null when no rule matches (which means "no").</summary>
@@ -498,12 +500,25 @@ public sealed class ForbiddenException : Exception
         Reason = reason;
     }
 
+    /// <summary>The action that was refused.</summary>
     public string Action { get; }
+
+    /// <summary>The subject the check was made on, as passed to the check (an object, a type name, a CLR type, or null).</summary>
     public object? Subject { get; }
+
+    /// <summary>The subject type of <see cref="Subject"/>, such as <c>"Post"</c>.</summary>
     public string SubjectType { get; }
+
+    /// <summary>The field the check was about, or null for the subject as a whole.</summary>
     public string? Field { get; }
+
+    /// <summary>The deciding <c>cannot</c> rule's reason, or null when no rule gave one (or no rule matched).</summary>
     public string? Reason { get; }
 
+    /// <summary>
+    /// The message: the one passed to <see cref="Ability.EnsureCan"/>, else the rule's reason, else
+    /// <see cref="AbilityOptions.ForbiddenMessage"/>, else <c>Cannot execute "action" on "Subject"</c>.
+    /// </summary>
     public override string Message => _message;
 
     internal void SetMessage(string message) => _message = message;
@@ -519,6 +534,7 @@ public enum FieldMatch
     Named,
 }
 
+/// <summary>Filters queries (EF Core or any LINQ provider) by what an <see cref="Ability"/> allows.</summary>
 public static class QueryableCaslExtensions
 {
     /// <summary>Only the rows the ability allows for <paramref name="action"/>.</summary>

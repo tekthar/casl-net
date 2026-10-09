@@ -9,11 +9,14 @@ public sealed class SubjectInstance
         Value = value;
     }
 
+    /// <summary>The subject type the object was tagged with.</summary>
     public string Type { get; }
 
+    /// <summary>The object itself; conditions are checked against it.</summary>
     public object Value { get; }
 }
 
+/// <summary>Tags objects with a subject type: CASL's <c>subject()</c> helper.</summary>
 public static class Subject
 {
     /// <summary>

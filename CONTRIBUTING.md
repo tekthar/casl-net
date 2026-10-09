@@ -15,6 +15,20 @@ Thanks for helping. Issues and pull requests are welcome.
 - **One meaning everywhere.** Anything `Filter<T>` translates to SQL must give the same answer in memory and in `@casl/ability`. The tests are the definition.
 - **No dependencies** in `CASL .NET` beyond the .NET base class library.
 
+## Releasing
+
+Maintainers release from `main`:
+
+1. Set the version in `Directory.Build.props` (`VersionPrefix`) and, when the browser package changed, in
+   `packages/casl-net` (`npm version <x.y.z> --no-git-tag-version`).
+2. Add the release to `CHANGELOG.md`.
+3. Commit, then tag and push: `git tag v<x.y.z> && git push origin v<x.y.z>`.
+
+The `release` workflow builds and tests on .NET 8 and .NET 10, runs the CASL compatibility test, checks that the tag
+matches the version, publishes `Casl.Net` to NuGet and `casl-net` to npm through trusted publishing (no stored keys),
+and creates a GitHub release with the packages attached. A version already on a registry is skipped, so a failed
+release can be re-run.
+
 ## Code of conduct
 
 Be respectful and assume good intent. Harassment or discrimination of any kind isn't tolerated. Report problems to the maintainers privately.

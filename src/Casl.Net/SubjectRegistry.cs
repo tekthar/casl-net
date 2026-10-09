@@ -21,14 +21,22 @@ public sealed class SubjectRegistry
     private readonly Dictionary<Type, SubjectDefinition> _openByType = [];
     private readonly object _gate = new();
 
+    /// <summary>The default name of the subject type that means every subject, as in CASL.</summary>
     public const string AllSubjects = "all";
+
+    /// <summary>The default name of the action that means every action, as in CASL.</summary>
     public const string AllActions = "manage";
 
     /// <summary>A CASL-style registry: every subject name is valid and conditions may use any public member.</summary>
     public static SubjectRegistry Open() => new() { IsOpen = true };
 
+    /// <summary>True for an open registry (<see cref="Open"/>); false for a strict one.</summary>
     public bool IsOpen { get; private init; }
 
+    /// <summary>
+    /// Registers <typeparamref name="T"/> as subject <paramref name="name"/>, with the member paths conditions may use
+    /// and the fields field-level rules may name. Paths are checked now, so a typo fails at startup.
+    /// </summary>
     public SubjectRegistry Add<T>(string name, Action<SubjectBuilder<T>>? configure = null)
     {
         if (name == AllSubjects)
@@ -44,11 +52,14 @@ public sealed class SubjectRegistry
         return this;
     }
 
+    /// <summary>The registered subjects.</summary>
     public IEnumerable<SubjectDefinition> Subjects => _byName.Values;
 
+    /// <summary>The registered subject with this name; throws <see cref="CaslConfigurationException"/> when there is none.</summary>
     public SubjectDefinition Get(string name) =>
         _byName.TryGetValue(name, out SubjectDefinition? d) ? d : throw new CaslConfigurationException($"Unknown subject '{name}'.");
 
+    /// <summary>The registered subject with this name, if there is one.</summary>
     public bool TryGet(string name, out SubjectDefinition? definition) => _byName.TryGetValue(name, out definition);
 
     /// <summary>The definition for a CLR type: the registered one, or in an open registry one made on the fly.</summary>
@@ -90,9 +101,11 @@ public sealed class SubjectRegistry
         return Get(type);
     }
 
+    /// <summary>Whether rules may name this subject: any name in an open registry, registered names and <c>all</c> in a strict one.</summary>
     public bool IsKnown(string name) => IsOpen || name == AllSubjects || _byName.ContainsKey(name);
 }
 
+/// <summary>A subject: its name, its CLR type, and what rules may use from it.</summary>
 public sealed class SubjectDefinition
 {
     internal SubjectDefinition(string name, Type type, IReadOnlyCollection<string> conditionPaths, IReadOnlyCollection<string> fields, bool allowAnyPath)
@@ -108,7 +121,10 @@ public sealed class SubjectDefinition
         }
     }
 
+    /// <summary>The subject type name rules use, such as <c>"WorkItem"</c>.</summary>
     public string Name { get; }
+
+    /// <summary>The CLR type objects of this subject have.</summary>
     public Type Type { get; }
 
     /// <summary>True in an open registry: conditions may use any public member.</summary>
@@ -123,6 +139,7 @@ public sealed class SubjectDefinition
     internal bool Allows(string path) => AllowAnyPath || ConditionPaths.Contains(path);
 }
 
+/// <summary>Configures one subject in a registry: see <see cref="SubjectRegistry.Add{T}"/>.</summary>
 public sealed class SubjectBuilder<T>
 {
     internal List<string> ConditionPaths { get; } = [];

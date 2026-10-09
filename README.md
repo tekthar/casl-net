@@ -1,5 +1,10 @@
 # CASL .NET
 
+[![NuGet](https://img.shields.io/nuget/v/Casl.Net.svg)](https://www.nuget.org/packages/Casl.Net)
+[![npm](https://img.shields.io/npm/v/casl-net.svg)](https://www.npmjs.com/package/casl-net)
+[![CI](https://github.com/tekthar/casl-net/actions/workflows/ci.yml/badge.svg)](https://github.com/tekthar/casl-net/actions/workflows/ci.yml)
+[![License: Apache-2.0](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](https://github.com/tekthar/casl-net/blob/main/LICENSE)
+
 > An independent, community-built .NET implementation of [CASL](https://casl.js.org)'s rule format and semantics. Not affiliated with or endorsed by CASL or its author.
 
 **CASL-compatible authorization for .NET.** Write permission rules once, in the [CASL](https://casl.js.org) format, and use them three ways:
@@ -9,19 +14,21 @@
 - **In the browser:** send `ability.ToCaslRules()` to the frontend and check them with the real `@casl/ability`.
 
 All three give the same answers. That isn't a promise; three sets of tests check it on every build:
-- **CASL's own test suite**, ported to C#: 172 of CASL's 187 runtime tests; the other 15 test JavaScript-only behaviour ([details](docs/casl-spec-port.md)).
+- **CASL's own test suite**, ported to C#: 172 of CASL's 187 runtime tests; the other 15 test JavaScript-only behaviour ([details](https://github.com/tekthar/casl-net/blob/main/docs/casl-spec-port.md)).
 - **Database vs memory:** 400 random rule sets × 2 actions × 120 entities on a real EF Core database, under both rule semantics. The SQL filter and the in-memory check return the same rows every time.
 - **CASL compatibility:** 24,000 decisions on 150 random rule sets, made by CASL .NET and by `@casl/ability` 7, all identical.
 
-It has no dependencies beyond .NET itself, so you can use it in any .NET 8 or later application, with or without EF Core. It was first built for [Msar](https://github.com/msar-dev), an open-source work management platform, and is maintained as a standalone project.
+It has no dependencies beyond .NET itself, so you can use it in any .NET 8 or later application, with or without EF Core. It was first built for Msar, an open-source work management platform, and is maintained by [Tekthar](https://github.com/tekthar) as a standalone project.
 
 ## Quick start
 
 Everything lives in the `Casl` namespace: `using Casl;`.
 
 ```bash
-dotnet add package Casl.Net --prerelease
+dotnet add package Casl.Net
 ```
+
+For the browser: `npm install casl-net @casl/ability`.
 
 If you know CASL, it works the way you expect:
 
@@ -127,7 +134,21 @@ How they behave:
 | Queries | `Filter<T>` and `AccessibleBy` for EF Core; `ToMongoQuery` for document stores; `Ability.RulesToCondition` for anything else |
 | Compact transport | `PackedRules.Pack` / `Unpack`, compatible with CASL's `packRules` / `unpackRules` |
 
-[docs/casl-spec-port.md](docs/casl-spec-port.md) maps each CASL function to its .NET name.
+[docs/casl-spec-port.md](https://github.com/tekthar/casl-net/blob/main/docs/casl-spec-port.md) maps each CASL function to its .NET name.
+
+## Documentation
+
+| Guide | What it covers |
+|---|---|
+| [Getting started](https://github.com/tekthar/casl-net/blob/main/docs/getting-started.md) | Install, a first ability, rules from a database, one ability per request in ASP.NET Core |
+| [Rules](https://github.com/tekthar/casl-net/blob/main/docs/rules.md) | The rule format, actions and subjects, placeholders, how rules combine, validating rules before saving them |
+| [Conditions](https://github.com/tekthar/casl-net/blob/main/docs/conditions.md) | Every operator, with examples, and what is refused and why |
+| [Subjects and fields](https://github.com/tekthar/casl-net/blob/main/docs/subjects-and-fields.md) | Strict and open registries, condition paths, field-level rules, field patterns and families, `FieldMatch.Named` |
+| [EF Core and SQL](https://github.com/tekthar/casl-net/blob/main/docs/ef-core.md) | `AccessibleBy` and `Filter<T>`, what the SQL looks like, navigations and collections, nulls, other stores |
+| [The browser](https://github.com/tekthar/casl-net/blob/main/docs/browser.md) | Sending rules to `@casl/ability` with the `casl-net` npm package, packed rules, checking fields in the UI |
+| [Coming from CASL](https://github.com/tekthar/casl-net/blob/main/docs/casl-spec-port.md) | Each CASL function's .NET name, and which of CASL's tests are ported |
+
+The [changelog](https://github.com/tekthar/casl-net/blob/main/CHANGELOG.md) lists what each release changed. The API reference is in the package's XML documentation, so your editor shows it.
 
 ## Repository
 
@@ -145,11 +166,13 @@ cd tests/casl-compat && npm install && npm test   # after dotnet test, which wri
 
 ## Status
 
-Preview (0.1.0-preview.1). The API may change before 1.0. Planned next:
+0.1.0, the first release. Every build checks its decisions against CASL and against a real database, but the API may still change before 1.0: minor versions (0.2, 0.3) may break it, and the [changelog](https://github.com/tekthar/casl-net/blob/main/CHANGELOG.md) will say how. Planned next:
 - custom operators, for example `$under` for org-unit subtrees through a closure table
 - ordering operators on enums
 - an ASP.NET Core package for per-request abilities and authorization policies
 
+Questions and ideas are welcome as [issues](https://github.com/tekthar/casl-net/issues); security problems go through [private reporting](https://github.com/tekthar/casl-net/blob/main/SECURITY.md).
+
 ## Credits and licence
 
-Apache License 2.0. CASL .NET is an independent implementation of CASL's rule format and semantics. CASL ([stalniy/casl](https://github.com/stalniy/casl)) is MIT-licensed, and its design is what this library follows. A few files are translations of CASL code (alias resolution, field patterns, rule packing, `rulesToCondition`), and the CASL tests are ported from CASL's specs; they are listed, with CASL's licence, in [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md).
+Apache License 2.0. CASL .NET is an independent implementation of CASL's rule format and semantics. CASL ([stalniy/casl](https://github.com/stalniy/casl)) is MIT-licensed, and its design is what this library follows. A few files are translations of CASL code (alias resolution, field patterns, rule packing, `rulesToCondition`), and the CASL tests are ported from CASL's specs; they are listed, with CASL's licence, in [THIRD-PARTY-NOTICES.md](https://github.com/tekthar/casl-net/blob/main/THIRD-PARTY-NOTICES.md).

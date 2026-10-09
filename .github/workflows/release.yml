@@ -1,0 +1,119 @@
+name: release
+
+# Pushing a tag such as v0.1.0 builds, tests and publishes Casl.Net to NuGet and casl-net to npm through trusted
+# publishing (short-lived credentials from GitHub's OIDC token, no stored API keys), then creates the GitHub release.
+# A version that's already on a registry is skipped, so a failed run can be re-run. See CONTRIBUTING.md.
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: |
+            8.0.x
+            10.0.x
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: The tag matches the version
+        run: |
+          tag="${GITHUB_REF_NAME#v}"
+          version="$(dotnet msbuild src/Casl.Net/Casl.Net.csproj -getProperty:Version)"
+          echo "Tag $tag, Casl.Net $version, casl-net $(node -p "require('./packages/casl-net/package.json').version")"
+          if [ "$tag" != "$version" ]; then
+            echo "::error::Tag v$tag doesn't match Casl.Net's version $version (Directory.Build.props)."
+            exit 1
+          fi
+      - run: dotnet build -c Release
+      - run: dotnet test -c Release --no-build
+      - name: CASL compatibility
+        working-directory: tests/casl-compat
+        run: |
+          npm ci
+          npm test
+      - run: dotnet pack src/Casl.Net -c Release --no-build -o artifacts
+      - name: Pack casl-net
+        working-directory: packages/casl-net
+        run: npm pack --pack-destination ../../artifacts
+      - uses: actions/upload-artifact@v4
+        with:
+          name: packages
+          path: artifacts/*
+          if-no-files-found: error
+
+  nuget:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write # trusted publishing: GitHub's OIDC token is exchanged for a one-hour NuGet API key
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: packages
+          path: artifacts
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+      - name: NuGet login
+        uses: NuGet/login@v1
+        id: login
+        with:
+          user: ${{ secrets.NUGET_USER }} # the nuget.org username (profile name) that created the trusted publishing policy
+      - name: Push Casl.Net (and its symbols)
+        run: >
+          dotnet nuget push "artifacts/*.nupkg"
+          --api-key "${{ steps.login.outputs.NUGET_API_KEY }}"
+          --source https://api.nuget.org/v3/index.json
+          --skip-duplicate
+
+  npm:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write # trusted publishing, with provenance
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          registry-url: https://registry.npmjs.org
+      - name: Publish casl-net unless this version is out already
+        working-directory: packages/casl-net
+        run: |
+          version="$(node -p "require('./package.json').version")"
+          if npm view "casl-net@$version" version > /dev/null 2>&1; then
+            echo "casl-net $version is on npm already."
+            exit 0
+          fi
+          npm install -g npm@11 # trusted publishing needs npm 11.5.1 or later
+          npm publish --access public
+
+  github-release:
+    needs: [nuget, npm]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: packages
+          path: artifacts
+      - name: Release notes from the changelog
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          awk -v v="$version" 'index($0, "## " v " ") == 1 { found = 1; next } /^## / && found { exit } found' CHANGELOG.md > notes.md
+          test -s notes.md || echo "See [CHANGELOG.md](CHANGELOG.md)." > notes.md
+      - name: Create the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "$GITHUB_REF_NAME" artifacts/* --title "CASL .NET ${GITHUB_REF_NAME#v}" --notes-file notes.md

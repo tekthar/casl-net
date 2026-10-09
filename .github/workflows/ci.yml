@@ -25,8 +25,10 @@ jobs:
         run: |
           npm ci || npm install
           npm test
-      - run: dotnet pack src/CASL .NET -c Release --no-build -o artifacts
+      - run: dotnet pack src/Casl.Net -c Release --no-build -o artifacts
       - uses: actions/upload-artifact@v4
         with:
           name: packages
-          path: artifacts/*.nupkg
+          path: |
+            artifacts/*.nupkg
+            artifacts/*.snupkg

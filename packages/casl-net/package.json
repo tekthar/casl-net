@@ -1,8 +1,27 @@
 {
   "name": "casl-net",
-  "version": "0.1.0-preview.1",
+  "version": "0.1.0",
   "description": "Use CASL .NET rules in the browser: @casl/ability with the MongoDB logical operators ($and, $or, $nor, $not) switched on, so it reaches the same decisions as the .NET library.",
   "license": "Apache-2.0",
+  "author": "Tekthar",
+  "homepage": "https://github.com/tekthar/casl-net/blob/main/docs/browser.md",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/tekthar/casl-net.git",
+    "directory": "packages/casl-net"
+  },
+  "bugs": {
+    "url": "https://github.com/tekthar/casl-net/issues"
+  },
+  "keywords": [
+    "casl",
+    "authorization",
+    "permissions",
+    "abac",
+    "rbac",
+    "dotnet",
+    "csharp"
+  ],
   "type": "module",
   "main": "./index.js",
   "types": "./index.d.ts",
@@ -16,17 +35,6 @@
     "index.js",
     "index.d.ts",
     "README.md"
-  ],
-  "repository": {
-    "type": "git",
-    "url": "https://github.com/msar-dev/casl-net.git",
-    "directory": "packages/casl-net"
-  },
-  "keywords": [
-    "casl",
-    "authorization",
-    "permissions",
-    "dotnet"
   ],
   "peerDependencies": {
     "@casl/ability": "^6.7.0 || ^7.0.0"

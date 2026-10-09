@@ -16,8 +16,10 @@ public enum RuleSemantics
     DenyOverrides,
 }
 
+/// <summary>How an <see cref="Ability"/> combines and names rules. The defaults match CASL.</summary>
 public sealed class AbilityOptions
 {
+    /// <summary>How rules combine when more than one matches: CASL's "last rule wins" (the default) or deny-overrides.</summary>
     public RuleSemantics Semantics { get; init; } = RuleSemantics.Casl;
 
     /// <summary>Action aliases, e.g. <c>modify</c> = <c>update</c> + <c>delete</c>. See <see cref="ActionAliases"/>.</summary>

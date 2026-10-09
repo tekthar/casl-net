@@ -305,8 +305,10 @@ internal sealed class ExpressionBuilder(SubjectDefinition subject, bool nullSafe
 }
 
 /// <summary>Holds a rule value. Expressions read its field, which EF Core parameterizes.</summary>
+[System.ComponentModel.EditorBrowsable(System.ComponentModel.EditorBrowsableState.Never)]
 public sealed class ValueBox<T>(T value)
 {
+    /// <summary>The rule value.</summary>
     public readonly T Value = value;
 }
 

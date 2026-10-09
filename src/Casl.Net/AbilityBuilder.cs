@@ -21,11 +21,16 @@ public sealed class AbilityBuilder
     {
     }
 
+    /// <summary>A builder with an open registry and the given options (semantics, aliases, names).</summary>
     public AbilityBuilder(AbilityOptions options)
         : this(SubjectRegistry.Open(), options)
     {
     }
 
+    /// <summary>
+    /// A builder whose rules are checked against <paramref name="subjects"/>. With a strict registry, conditions may
+    /// only use the member paths it lists and field-level rules only its fields.
+    /// </summary>
     public AbilityBuilder(SubjectRegistry subjects, AbilityOptions? options = null)
     {
         _subjects = subjects;
@@ -49,6 +54,7 @@ public sealed class AbilityBuilder
         return this;
     }
 
+    /// <summary>Adds rules in order, for example from a database. <paramref name="variables"/> apply to these rules only.</summary>
     public AbilityBuilder AddRange(IEnumerable<RawRule> rules, object? variables = null)
     {
         foreach (RawRule rule in rules)
@@ -71,6 +77,7 @@ public sealed class AbilityBuilder
     public RuleBuilder Cannot(string action, string? subject = null, object? conditions = null, string? reason = null, params string[] fields) =>
         AddRule([action], subject is null ? null : [subject], conditions, fields, inverted: true, reason);
 
+    /// <summary>Forbids several actions on several subjects in one rule.</summary>
     public RuleBuilder Cannot(IReadOnlyList<string> actions, IReadOnlyList<string>? subjects, object? conditions = null, string? reason = null, params string[] fields) =>
         AddRule(actions, subjects, conditions, fields, inverted: true, reason);
 
@@ -78,6 +85,7 @@ public sealed class AbilityBuilder
     public RuleBuilder Can<TSubject>(string action, object? conditions = null, params string[] fields) =>
         Can(action, _subjects.Get(typeof(TSubject)).Name, conditions, fields);
 
+    /// <summary>Forbids <paramref name="action"/> on the subject registered for <typeparamref name="TSubject"/>.</summary>
     public RuleBuilder Cannot<TSubject>(string action, object? conditions = null, string? reason = null, params string[] fields) =>
         Cannot(action, _subjects.Get(typeof(TSubject)).Name, conditions, reason, fields);
 
@@ -99,6 +107,11 @@ public sealed class AbilityBuilder
     internal void Update(int index, Func<RawRule, RawRule> change) =>
         _rules[index] = _rules[index] with { Rule = change(_rules[index].Rule) };
 
+    /// <summary>
+    /// Fills in placeholders, validates every rule against the registry and returns the immutable
+    /// <see cref="Ability"/>. Throws <see cref="CaslConfigurationException"/> for a rule that can't be enforced
+    /// exactly (unknown subject, path, operator or placeholder, or a value of the wrong type).
+    /// </summary>
     public Ability Build()
     {
         ActionAliases? aliases = _options.Aliases;
@@ -249,22 +262,29 @@ public sealed class RuleBuilder
         return this;
     }
 
+    /// <summary>Adds another allow rule. See <see cref="AbilityBuilder.Can(string, string?, object?, string[])"/>.</summary>
     public RuleBuilder Can(string action, string? subject = null, object? conditions = null, params string[] fields) =>
         _builder.Can(action, subject, conditions, fields);
 
+    /// <summary>Adds another <c>cannot</c> rule. See <see cref="AbilityBuilder.Cannot(string, string?, object?, string?, string[])"/>.</summary>
     public RuleBuilder Cannot(string action, string? subject = null, object? conditions = null, string? reason = null, params string[] fields) =>
         _builder.Cannot(action, subject, conditions, reason, fields);
 
+    /// <summary>Adds another allow rule on the subject registered for <typeparamref name="TSubject"/>.</summary>
     public RuleBuilder Can<TSubject>(string action, object? conditions = null, params string[] fields) =>
         _builder.Can<TSubject>(action, conditions, fields);
 
+    /// <summary>Adds another <c>cannot</c> rule on the subject registered for <typeparamref name="TSubject"/>.</summary>
     public RuleBuilder Cannot<TSubject>(string action, object? conditions = null, string? reason = null, params string[] fields) =>
         _builder.Cannot<TSubject>(action, conditions, reason, fields);
 
+    /// <summary>Adds a raw rule. See <see cref="AbilityBuilder.Add"/>.</summary>
     public AbilityBuilder Add(RawRule rule, object? variables = null) => _builder.Add(rule, variables);
 
+    /// <summary>Adds raw rules in order. See <see cref="AbilityBuilder.AddRange"/>.</summary>
     public AbilityBuilder AddRange(IEnumerable<RawRule> rules, object? variables = null) => _builder.AddRange(rules, variables);
 
+    /// <summary>Builds the ability. See <see cref="AbilityBuilder.Build"/>.</summary>
     public Ability Build() => _builder.Build();
 
     /// <summary>Lets a <see cref="RuleBuilder"/> stand in for its builder: <c>AbilityBuilder b = builder.Can(...)</c>.</summary>

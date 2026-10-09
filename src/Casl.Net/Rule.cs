@@ -32,10 +32,13 @@ public sealed class Rule
     /// <summary>The MongoDB-style conditions, or null when the rule applies to every instance (empty conditions count as none).</summary>
     public JsonObject? Conditions => Condition is null ? null : Origin.Conditions;
 
+    /// <summary>The fields the rule is limited to (patterns allowed), or null for every field.</summary>
     public IReadOnlyList<string>? Fields => Origin.Fields;
 
+    /// <summary>True for a <c>cannot</c> rule.</summary>
     public bool Inverted => Origin.Inverted;
 
+    /// <summary>The message shown when this rule denies access.</summary>
     public string? Reason => Origin.Reason;
 
     /// <summary>Higher wins: the last rule added has the highest priority.</summary>
@@ -57,5 +60,6 @@ public sealed class Rule
         return field is null ? !Inverted : _fieldMatcher.Matches(field);
     }
 
+    /// <summary>The rule as JSON in CASL's format.</summary>
     public override string ToString() => Origin.ToJson();
 }

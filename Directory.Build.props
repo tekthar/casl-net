@@ -5,15 +5,23 @@
     <LangVersion>latest</LangVersion>
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
 
-    <Authors>CASL .NET contributors</Authors>
+    <Authors>Tekthar and CASL .NET contributors</Authors>
+    <Company>Tekthar</Company>
     <Copyright>Copyright 2026 CASL .NET contributors</Copyright>
     <PackageLicenseExpression>Apache-2.0</PackageLicenseExpression>
-    <PackageProjectUrl>https://github.com/msar-dev/casl-net</PackageProjectUrl>
-    <RepositoryUrl>https://github.com/msar-dev/casl-net</RepositoryUrl>
+    <PackageProjectUrl>https://github.com/tekthar/casl-net</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/tekthar/casl-net</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
     <PackageReadmeFile>README.md</PackageReadmeFile>
-    <PackageTags>authorization;permissions;abac;rbac;casl;ef-core;linq;row-level-security</PackageTags>
+    <PackageTags>authorization;permissions;abac;rbac;casl;ef-core;linq;row-level-security;field-level-security</PackageTags>
+    <PackageReleaseNotes>https://github.com/tekthar/casl-net/blob/main/CHANGELOG.md</PackageReleaseNotes>
     <VersionPrefix>0.1.0</VersionPrefix>
-    <VersionSuffix>preview.1</VersionSuffix>
+
+    <!-- Debugging into the package: SourceLink (built into the .NET SDK) and a symbol package next to the .nupkg. -->
+    <PublishRepositoryUrl>true</PublishRepositoryUrl>
+    <EmbedUntrackedSources>true</EmbedUntrackedSources>
+    <IncludeSymbols>true</IncludeSymbols>
+    <SymbolPackageFormat>snupkg</SymbolPackageFormat>
+    <ContinuousIntegrationBuild Condition="'$(GITHUB_ACTIONS)' == 'true'">true</ContinuousIntegrationBuild>
   </PropertyGroup>
 </Project>

@@ -15,6 +15,11 @@ public sealed class ActionAliases
 
     private ActionAliases(Dictionary<string, string[]> map) => _map = map;
 
+    /// <summary>
+    /// Aliases from a map of alias to actions, e.g. <c>["modify"] = ["update", "delete"]</c>. With
+    /// <paramref name="validate"/>, cycles and aliases of <paramref name="anyAction"/> throw
+    /// <see cref="CaslConfigurationException"/>.
+    /// </summary>
     public static ActionAliases Create(IReadOnlyDictionary<string, string[]> aliases, string anyAction = SubjectRegistry.AllActions, bool validate = true)
     {
         Dictionary<string, string[]> map = aliases.ToDictionary(p => p.Key, p => p.Value.ToArray(), StringComparer.Ordinal);
@@ -26,6 +31,7 @@ public sealed class ActionAliases
         return new ActionAliases(map);
     }
 
+    /// <summary>Aliases from a map of alias to one action each, e.g. <c>["edit"] = "update"</c>.</summary>
     public static ActionAliases Create(IReadOnlyDictionary<string, string> aliases, string anyAction = SubjectRegistry.AllActions, bool validate = true) =>
         Create(aliases.ToDictionary(p => p.Key, p => new[] { p.Value }), anyAction, validate);
 

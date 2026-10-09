@@ -30,9 +30,11 @@ public sealed record RawRule
     /// <summary>Shown to the user when this rule denies access.</summary>
     public string? Reason { get; init; }
 
+    /// <summary>An allow rule. <paramref name="conditions"/> is an object, a <see cref="JsonObject"/> or JSON text.</summary>
     public static RawRule Can(string action, string? subject = null, object? conditions = null, IReadOnlyList<string>? fields = null) =>
         new() { Action = [action], Subject = subject is null ? null : [subject], Conditions = ToConditions(conditions), Fields = fields };
 
+    /// <summary>A <c>cannot</c> rule; <paramref name="reason"/> becomes the error message when it denies access.</summary>
     public static RawRule Cannot(string action, string? subject = null, object? conditions = null, IReadOnlyList<string>? fields = null, string? reason = null) =>
         new() { Action = [action], Subject = subject is null ? null : [subject], Conditions = ToConditions(conditions), Fields = fields, Inverted = true, Reason = reason };
 
@@ -40,9 +42,11 @@ public sealed record RawRule
     public static IReadOnlyList<RawRule> ParseMany(string json) =>
         JsonSerializer.Deserialize<List<RawRule>>(json) ?? [];
 
+    /// <summary>Parses one raw rule from JSON in CASL's format.</summary>
     public static RawRule Parse(string json) =>
         JsonSerializer.Deserialize<RawRule>(json) ?? throw new CaslConfigurationException("Empty rule.");
 
+    /// <summary>The rule as JSON in CASL's format; single actions, subjects and fields are written as strings.</summary>
     public string ToJson() => JsonSerializer.Serialize(this);
 
     internal static JsonObject? ToConditions(object? conditions) => conditions switch

@@ -13,14 +13,18 @@ namespace Casl;
 /// </summary>
 public static class PackedRules
 {
+    /// <summary>Packs raw rules, e.g. <see cref="Ability.ToCaslRules"/>, for <c>unpackRules</c> in the browser.</summary>
     public static JsonArray Pack(IEnumerable<RawRule> rules) =>
         new(rules.Select(rule => (JsonNode?)PackOne(rule)).ToArray());
 
+    /// <summary>Packs an ability's rules, with placeholders filled in.</summary>
     public static JsonArray Pack(IEnumerable<Rule> rules) => Pack(rules.Select(r => r.Origin));
 
+    /// <summary>Unpacks rules packed here or by CASL's <c>packRules</c>.</summary>
     public static IReadOnlyList<RawRule> Unpack(JsonArray packed) =>
         packed.Select(item => UnpackOne(item as JsonArray ?? throw new CaslConfigurationException("Each packed rule must be an array."))).ToList();
 
+    /// <summary>Unpacks rules from their JSON text.</summary>
     public static IReadOnlyList<RawRule> Unpack(string json) =>
         Unpack(JsonNode.Parse(json) as JsonArray ?? throw new CaslConfigurationException("Packed rules must be a JSON array."));
 

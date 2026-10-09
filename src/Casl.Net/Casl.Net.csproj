@@ -7,7 +7,6 @@
     <Title>CASL .NET</Title>
     <Description>CASL-compatible authorization for .NET. One set of rules (MongoDB-style conditions, the format CASL uses) is checked against objects in memory, translated to SQL by EF Core through LINQ expressions, and can be sent to the browser for @casl/ability.</Description>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
-    <NoWarn>$(NoWarn);CS1591</NoWarn>
   </PropertyGroup>
 
   <ItemGroup>
