@@ -20,10 +20,13 @@ jobs:
           node-version: 22
       - run: dotnet build -c Release
       - run: dotnet test -c Release --no-build
+      - name: Install casl-net's dependencies
+        working-directory: packages/casl-net
+        run: npm ci
       - name: CASL compatibility
         working-directory: tests/casl-compat
         run: |
-          npm ci || npm install
+          npm ci
           npm test
       - run: dotnet pack src/Casl.Net -c Release --no-build -o artifacts
       - uses: actions/upload-artifact@v4

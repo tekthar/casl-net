@@ -35,6 +35,9 @@ jobs:
           fi
       - run: dotnet build -c Release
       - run: dotnet test -c Release --no-build
+      - name: Install casl-net's dependencies
+        working-directory: packages/casl-net
+        run: npm ci
       - name: CASL compatibility
         working-directory: tests/casl-compat
         run: |
