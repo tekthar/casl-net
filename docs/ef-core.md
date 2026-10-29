@@ -62,7 +62,9 @@ compare every SQL result with the in-memory check. It's used with PostgreSQL (Np
 
 Two things depend on the provider:
 - **`$regex`** becomes `Regex.IsMatch`, which PostgreSQL and SQLite translate and some providers don't. A predicate EF
-  Core can't translate makes the query throw; it never falls back to filtering in memory.
+  Core can't translate makes the query throw; it never falls back to filtering in memory. Patterns are limited to
+  what .NET and PostgreSQL read the same way (see [Conditions](conditions.md#text)), so `Can` and the SQL filter agree
+  on both.
 - **Text comparisons** follow the database's collation for `$eq` and `$in`. Ordering operators are refused on text for
   that reason (see [Conditions](conditions.md#ordering)).
 

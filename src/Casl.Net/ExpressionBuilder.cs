@@ -153,7 +153,7 @@ internal sealed class ExpressionBuilder(SubjectDefinition subject, bool nullSafe
 
     /// <summary>
     /// <c>{ $regex, $options }</c>. EF Core translates <c>Regex.IsMatch</c> on PostgreSQL and SQLite (options only on
-    /// PostgreSQL); other providers may not translate it.
+    /// PostgreSQL); other providers may not translate it. See <see cref="PortableRegex"/> for what's refused or rewritten.
     /// </summary>
     private Expression Regex(Expression member, Type memberType, JsonObject spec, string path)
     {
@@ -164,15 +164,6 @@ internal sealed class ExpressionBuilder(SubjectDefinition subject, bool nullSafe
 
         string pattern = spec["pattern"]?.GetValue<string>() ?? throw new CaslConfigurationException($"'$regex' on '{path}' needs a pattern.");
         string flags = spec["options"]?.GetValue<string>() ?? string.Empty;
-        try
-        {
-            _ = new System.Text.RegularExpressions.Regex(pattern);
-        }
-        catch (ArgumentException ex)
-        {
-            throw new CaslConfigurationException($"'$regex' on '{path}' is not a valid pattern: {ex.Message}");
-        }
-
         System.Text.RegularExpressions.RegexOptions options = System.Text.RegularExpressions.RegexOptions.None;
         foreach (char flag in flags)
         {
@@ -186,9 +177,20 @@ internal sealed class ExpressionBuilder(SubjectDefinition subject, bool nullSafe
             };
         }
 
+        try
+        {
+            _ = new System.Text.RegularExpressions.Regex(pattern, options);
+        }
+        catch (ArgumentException ex)
+        {
+            throw new CaslConfigurationException($"'$regex' on '{path}' is not a valid pattern: {ex.Message}");
+        }
+
+        // The same pattern runs in memory and in SQL, rewritten so .NET and the database agree.
+        string portable = PortableRegex.Rewrite(pattern, options, path);
         Expression match = options == System.Text.RegularExpressions.RegexOptions.None
-            ? Expression.Call(RegexIsMatch, member, Box(pattern, typeof(string)))
-            : Expression.Call(RegexIsMatchWithOptions, member, Box(pattern, typeof(string)), Expression.Constant(options));
+            ? Expression.Call(RegexIsMatch, member, Box(portable, typeof(string)))
+            : Expression.Call(RegexIsMatchWithOptions, member, Box(portable, typeof(string)), Expression.Constant(options));
         // Also in SQL: without the guard, NULL REGEXP gives NULL, and NOT NULL stays NULL, so $nor would drop the row.
         return Expression.AndAlso(Expression.NotEqual(member, Expression.Constant(null, typeof(string))), match);
     }

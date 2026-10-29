@@ -38,10 +38,26 @@ comparison with `null` never matches, as in MongoDB.
 { "summary": { "$regex": "^urgent", "$options": "i" } }
 ```
 
-`$regex` takes a .NET regular expression and works on text members only. `$options` may contain `i`, `m`, `s` and `x`.
-An invalid pattern fails the build. In SQL, it becomes `Regex.IsMatch`, which EF Core translates on providers with
-regular expressions (PostgreSQL and SQLite, for example); on others the query fails to translate instead of running
-in memory.
+`$regex` takes a regular expression and works on text members only. `$options` may contain `i`, `m`, `s` and `x`,
+but not `m` and `s` together. An invalid pattern fails the build. In SQL, it becomes `Regex.IsMatch`, which EF Core
+translates on providers with regular expressions (PostgreSQL and SQLite, for example); on others the query fails to
+translate instead of running in memory.
+
+The pattern must mean the same in .NET and in the database, so constructs PostgreSQL reads differently, or not at
+all, fail the build:
+
+| Refused | Use instead |
+|---|---|
+| `\d` `\D` `\w` `\W` `\s` `\S` (they differ on non-ASCII text) | `[0-9]`, `[A-Za-z0-9_]`, `[ \t\n\r\f\v]` |
+| `\b` `\B` (a backspace in PostgreSQL) | spell out the boundary, such as `(^\|[^A-Za-z])word($\|[^A-Za-z])` |
+| `\A` `\Z` `\z` `\G` `\p{…}` `\P{…}` `\x…`, back-references and octal (`\1`, `\141`) | `^`, `$`, the characters themselves |
+| named, atomic and conditional groups, inline options, `(?#…)` comments | `(…)`, `(?:…)`, `$options` |
+| `[` inside a character class (POSIX classes such as `[[:alpha:]]`, class subtraction) | `\[` for a literal, or list the characters |
+
+Everything else works as usual: literals, `.`, `^`, `$`, `|`, `(…)`, `(?:…)`, lookarounds, quantifiers, character
+classes and escaped symbols such as `\.` or `\[`, plus `\t`, `\n`, `\r`, `\f`, `\v` and `\uXXXX`. Two things follow
+PostgreSQL's rules, in memory as well: without `m`, `$` matches only at the very end of the text, not before a final
+newline; and unless `s` is set, `[^…]` doesn't match a newline (just as `.` doesn't).
 
 ## Logic
 

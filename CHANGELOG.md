@@ -18,6 +18,16 @@ says how.
 - `PermittedFields` now leaves out fields that a `cannot` rule's pattern denies. It removed a deny's field strings
   literally, so `Cannot(read, WorkItem, fields: "cost.*")` removed nothing and `cost.total` stayed listed while
   `Can(read, item, "cost.total")` returned false.
+- `$regex` now decides the same in memory and on PostgreSQL. The pattern ran as .NET syntax in memory but as
+  PostgreSQL syntax in SQL, so `{ "$regex": "\\bconfidential\\b" }` in a `cannot` rule denied in `Can` but matched
+  nothing in `AccessibleBy` (`\b` is a backspace in PostgreSQL), which returned the rows `Can` refused.
+  - **Breaking:** constructs PostgreSQL reads differently now fail the build: `\d \D \w \W \s \S \b \B \A \Z \z \G`,
+    `\p{…}`, `\x…`, back-references and octal escapes, named, atomic and conditional groups, inline options, POSIX
+    classes and class subtraction, and the options `m` and `s` together. See
+    [Conditions](docs/conditions.md#text) for replacements.
+  - Without `m`, `$` no longer matches before a final newline, and unless `s` is set, `[^…]` no longer matches a
+    newline, in memory and on SQLite too, as on PostgreSQL.
+  - A pattern is now validated with its `$options`, so one that is valid only without them fails the build.
 
 ## 0.1.0 (2026-10-10)
 

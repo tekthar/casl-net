@@ -313,6 +313,58 @@ public class AbilityTests
         Assert.Contains(message, ex.Message);
     }
 
+    // Each of these means something else in PostgreSQL (or isn't supported there), so SQL and Can would disagree.
+    [Theory]
+    [InlineData("""\\bconfidential\\b""", "", "'\\b'")]
+    [InlineData("""\\B""", "", "'\\B'")]
+    [InlineData("""^\\d+$""", "", "'\\d'")]
+    [InlineData("""\\w""", "", "'\\w'")]
+    [InlineData("""a\\sc""", "", "'\\s'")]
+    [InlineData("""[\\d]""", "", "'\\d'")]
+    [InlineData("""\\Aabc""", "", "'\\A'")]
+    [InlineData("""abc\\Z""", "", "'\\Z'")]
+    [InlineData("""\\p{L}""", "", "'\\p'")]
+    [InlineData("""\\x61""", "", "'\\x'")]
+    [InlineData("""(a)\\1""", "", "'\\1'")]
+    [InlineData("""(?<n>a)""", "", "group")]
+    [InlineData("""(?>a+)b""", "", "group")]
+    [InlineData("""(?i)abc""", "", "group")]
+    [InlineData("""[[:alpha:]]""", "", "inside a character class")]
+    [InlineData("""[a-z-[aeiou]]""", "", "inside a character class")]
+    [InlineData("""a.b""", "ms", "can't combine 'm' and 's'")]
+    public void Regex_constructs_databases_read_differently_are_refused(string pattern, string options, string message)
+    {
+        string conditions = $$"""{ "summary": { "$regex": "{{pattern}}", "$options": "{{options}}" } }""";
+        CaslConfigurationException ex = Assert.Throws<CaslConfigurationException>(
+            () => new AbilityBuilder(Registry).Add(RawRule.Can("read", "WorkItem", conditions)).Build());
+        Assert.Contains(message, ex.Message);
+    }
+
+    [Theory]
+    [InlineData("abc$", "", "abc\n", false)] // .NET's $ also matches before a final newline; PostgreSQL's doesn't
+    [InlineData("abc$", "", "abc", true)]
+    [InlineData("abc$", "m", "abc\nx", true)]
+    [InlineData("a[^x]b", "", "a\nb", false)] // PostgreSQL's [^x] doesn't match a newline unless only 's' is set
+    [InlineData("a[^x]b", "m", "a\nb", false)]
+    [InlineData("a[^x]b", "s", "a\nb", true)]
+    [InlineData("a[^x]b", "", "a-b", true)]
+    [InlineData("^[^]a]$", "", "]", false)]
+    [InlineData("^[^]a]$", "", "b", true)]
+    [InlineData("x[^\\]]y", "", "x-y", true)]
+    [InlineData("a b # $ [^ comment", "x", "ab", true)]
+    [InlineData("^\\[DELETED\\]\\.$", "i", "[deleted].", true)]
+    public void Regex_newlines_match_as_in_the_database(string pattern, string options, string summary, bool expected)
+    {
+        JsonObject regex = new() { ["$regex"] = pattern, ["$options"] = options };
+        Ability ability = new AbilityBuilder(Registry)
+            .Add(RawRule.Can("read", "WorkItem", new JsonObject { ["summary"] = regex }))
+            .Build();
+        WorkItem item = new() { Summary = summary };
+
+        Assert.Equal(expected, ability.Can("read", item));
+        Assert.Equal(expected, ability.Filter<WorkItem>("read").Compile()(item));
+    }
+
     [Fact]
     public void Validate_accepts_placeholders_without_values()
     {
