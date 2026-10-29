@@ -251,13 +251,21 @@ public sealed class Ability
     /// The rules for an action and subject type as one MongoDB query, or null when nothing is allowed and an empty
     /// object when everything is. Useful for document databases and search engines.
     /// </summary>
-    public JsonObject? ToMongoQuery(string action, string subjectType) =>
-        Combine<JsonNode>(
-            RulesFor(action, subjectType),
+    public JsonObject? ToMongoQuery(string action, string subjectType)
+    {
+        IReadOnlyList<Rule> rules = RulesFor(action, subjectType);
+        if (_options.Semantics == RuleSemantics.DenyOverrides)
+        {
+            return DenyOverridesMongoQuery(rules);
+        }
+
+        return Combine<JsonNode>(
+            rules,
             rule => rule.Inverted ? new JsonObject { ["$nor"] = new JsonArray(rule.Conditions!.DeepClone()) } : rule.Conditions!.DeepClone(),
             all => all.Count == 1 ? all[0].DeepClone() : new JsonObject { ["$and"] = new JsonArray(all.Select(n => (JsonNode?)n.DeepClone()).ToArray()) },
             any => any.Count == 1 ? any[0].DeepClone() : new JsonObject { ["$or"] = new JsonArray(any.Select(n => (JsonNode?)n.DeepClone()).ToArray()) },
             () => new JsonObject()) as JsonObject;
+    }
 
     /// <summary>
     /// Turns rules (highest priority first, as <see cref="RulesFor"/> returns them) into one condition, the way
@@ -423,6 +431,30 @@ public sealed class Ability
 
         Expression? deny = Any(rules.Where(r => r.Inverted)); // RulesFor already dropped cannot rules limited to fields
         return deny is null ? allow : Expression.AndAlso(allow, Expression.Not(deny));
+    }
+
+    /// <summary>The query <see cref="DenyOverridesFilter"/> makes: any allow rule matches and no <c>cannot</c> rule does, whatever their order.</summary>
+    private static JsonObject? DenyOverridesMongoQuery(IReadOnlyList<Rule> rules)
+    {
+        List<Rule> allows = rules.Where(r => !r.Inverted).ToList();
+        List<Rule> denies = rules.Where(r => r.Inverted).ToList(); // RulesFor already dropped cannot rules limited to fields
+        if (allows.Count == 0 || denies.Any(r => r.Condition is null))
+        {
+            return null;
+        }
+
+        JsonObject? allow = allows.Any(r => r.Condition is null)
+            ? null // every instance, so only the cannot rules limit it
+            : allows.Count == 1
+                ? (JsonObject)allows[0].Conditions!.DeepClone()
+                : new JsonObject { ["$or"] = new JsonArray(allows.Select(r => (JsonNode?)r.Conditions!.DeepClone()).ToArray()) };
+        if (denies.Count == 0)
+        {
+            return allow ?? new JsonObject();
+        }
+
+        JsonObject nor = new() { ["$nor"] = new JsonArray(denies.Select(r => (JsonNode?)r.Conditions!.DeepClone()).ToArray()) };
+        return allow is null ? nor : new JsonObject { ["$and"] = new JsonArray(allow, nor) };
     }
 
     private static TResult? Combine<TResult>(IReadOnlyList<Rule> rules, Func<Rule, TResult> convert,

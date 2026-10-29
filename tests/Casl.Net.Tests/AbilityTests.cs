@@ -59,6 +59,45 @@ public class AbilityTests
     }
 
     [Fact]
+    public void Mongo_query_with_deny_overrides_keeps_cannot_rules_whatever_the_order()
+    {
+        Ability denyFirst = new AbilityBuilder(Registry, DenyOverrides)
+            .Cannot("read", "WorkItem", new { status = "Done" })
+            .Can("read", "WorkItem")
+            .Build();
+        Ability conditionalAllow = new AbilityBuilder(Registry, DenyOverrides)
+            .Cannot("read", "WorkItem", new { status = "Done" })
+            .Can("read", "WorkItem", new { assigneeId = "u1" })
+            .Can("read", "WorkItem", new { priority = 5 })
+            .Build();
+
+        Assert.Equal("""{"$nor":[{"status":"Done"}]}""", denyFirst.ToMongoQuery("read", "WorkItem")?.ToJsonString());
+        Assert.Equal(
+            """{"$and":[{"$or":[{"priority":5},{"assigneeId":"u1"}]},{"$nor":[{"status":"Done"}]}]}""",
+            conditionalAllow.ToMongoQuery("read", "WorkItem")?.ToJsonString());
+    }
+
+    [Fact]
+    public void Mongo_query_with_deny_overrides_edge_cases()
+    {
+        Ability everything = new AbilityBuilder(Registry, DenyOverrides).Can("read", "WorkItem").Build();
+        Ability onlyDenies = new AbilityBuilder(Registry, DenyOverrides).Cannot("read", "WorkItem", new { status = "Done" }).Build();
+        Ability unconditionalDeny = new AbilityBuilder(Registry, DenyOverrides)
+            .Can("read", "WorkItem", new { assigneeId = "u1" })
+            .Cannot("read", "WorkItem")
+            .Build();
+        Ability fieldDeny = new AbilityBuilder(Registry, DenyOverrides)
+            .Cannot("read", "WorkItem", fields: "priority")
+            .Can("read", "WorkItem", new { assigneeId = "u1" })
+            .Build();
+
+        Assert.Equal("{}", everything.ToMongoQuery("read", "WorkItem")?.ToJsonString());
+        Assert.Null(onlyDenies.ToMongoQuery("read", "WorkItem"));
+        Assert.Null(unconditionalDeny.ToMongoQuery("read", "WorkItem"));
+        Assert.Equal("""{"assigneeId":"u1"}""", fieldDeny.ToMongoQuery("read", "WorkItem")?.ToJsonString());
+    }
+
+    [Fact]
     public void Named_fields_are_granted_only_by_rules_that_name_them()
     {
         Ability member = new AbilityBuilder(Registry, DenyOverrides).Can("read", "WorkItem").Build();

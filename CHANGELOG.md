@@ -11,6 +11,10 @@ says how.
   filled in as JSON null (a whole placeholder) or as empty text (inside a longer string), so `{ "assigneeId":
   "${user.id}" }` with a null id matched every unassigned record, in memory and in SQL, and a `cannot` rule written the
   same way stopped denying. Abilities built with null variables now throw `CaslConfigurationException`.
+- `ToMongoQuery` now follows `RuleSemantics.DenyOverrides`. It used CASL's "last rule wins" whatever the semantics, so
+  a `cannot` rule added before an allow rule was left out: `Cannot(read, Post, { secret: true })` then
+  `Can(read, Post)` gave `{}` (every document) instead of `{ "$nor": [{ "secret": true }] }`, unlike `Can` and
+  `Filter`.
 
 ## 0.1.0 (2026-10-10)
 

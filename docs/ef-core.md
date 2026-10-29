@@ -68,8 +68,9 @@ Two things depend on the provider:
 
 ## Other stores
 
-- **`ability.ToMongoQuery(action, subjectType)`** gives the rules as one MongoDB query (`$or` of allow rules, each with
-  `$nor` of the `cannot` rules above it). It returns null when nothing is allowed and `{}` when everything is. Use it
-  for document databases and search engines.
+- **`ability.ToMongoQuery(action, subjectType)`** gives the rules as one MongoDB query: with CASL semantics an `$or` of
+  allow rules, each with `$nor` of the `cannot` rules above it; with deny-overrides the `$or` of allow rules and a
+  `$nor` of every `cannot` rule. It returns null when nothing is allowed and `{}` when everything is. Use it for
+  document databases and search engines.
 - **`Ability.RulesToCondition(rules, convert, and, or, empty)`** is CASL's `rulesToCondition`: give it
   `ability.RulesFor(action, subjectType)` and three functions that build your own query type.
