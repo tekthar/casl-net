@@ -313,6 +313,32 @@ public class AbilityTests
         Assert.Contains(message, ex.Message);
     }
 
+    // A rule author learns nothing about members the registry doesn't list, whichever operator they try.
+    [Theory]
+    [InlineData("""{ "nope": { "$elemMatch": { "a": 1 } } }""")]
+    [InlineData("""{ "project.name": { "$elemMatch": { "a": 1 } } }""")]
+    [InlineData("""{ "comments.workItemId": { "$elemMatch": { "a": 1 } } }""")]
+    [InlineData("""{ "comments.nope": { "$elemMatch": { "a": 1 } } }""")]
+    public void Elem_match_on_unlisted_paths_gives_the_same_answer(string conditions)
+    {
+        IReadOnlyList<string> problems = AbilityBuilder.Validate(RawRule.Can("read", "WorkItem", conditions), Registry);
+
+        Assert.Contains("not allowed", Assert.Single(problems));
+    }
+
+    [Fact]
+    public void Elem_match_on_a_listed_collection_still_works()
+    {
+        Ability ability = new AbilityBuilder(Registry)
+            .Can("read", "WorkItem", """{ "comments": { "$elemMatch": { "authorId": "u2", "internal": false } } }""")
+            .Build();
+        WorkItem item = Item();
+        item.Comments.Add(new Comment { AuthorId = "u2", Internal = false });
+
+        Assert.True(ability.Can("read", item));
+        Assert.False(ability.Can("read", Item()));
+    }
+
     // Each of these means something else in PostgreSQL (or isn't supported there), so SQL and Can would disagree.
     [Theory]
     [InlineData("""\\bconfidential\\b""", "", "'\\b'")]

@@ -137,6 +137,10 @@ public sealed class SubjectDefinition
     public IReadOnlyList<string> Fields { get; }
 
     internal bool Allows(string path) => AllowAnyPath || ConditionPaths.Contains(path);
+
+    /// <summary>Whether conditions may use <paramref name="path"/> or a path under it ("comments" for "comments.authorId").</summary>
+    internal bool AllowsUnder(string path) =>
+        Allows(path) || ConditionPaths.Any(p => p.Length > path.Length && p[path.Length] == '.' && p.StartsWith(path, StringComparison.Ordinal));
 }
 
 /// <summary>Configures one subject in a registry: see <see cref="SubjectRegistry.Add{T}"/>.</summary>

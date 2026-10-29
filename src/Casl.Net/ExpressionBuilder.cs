@@ -79,6 +79,11 @@ internal sealed class ExpressionBuilder(SubjectDefinition subject, bool nullSafe
     private Expression BuildElemMatch(ElemMatchCondition elem, Expression target, string pathPrefix)
     {
         string fullPath = Join(pathPrefix, elem.Path);
+        if (!subject.AllowsUnder(fullPath))
+        {
+            CheckAllowed(fullPath); // before touching members, as in BuildField
+        }
+
         (Expression member, Type memberType) = Access(target, elem.Path);
         Type elementType = ElementTypeOf(memberType)
             ?? throw new CaslConfigurationException($"'$elemMatch' needs a collection, but '{fullPath}' is {memberType.Name}.");
