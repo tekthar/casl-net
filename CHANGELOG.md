@@ -15,6 +15,9 @@ says how.
   a `cannot` rule added before an allow rule was left out: `Cannot(read, Post, { secret: true })` then
   `Can(read, Post)` gave `{}` (every document) instead of `{ "$nor": [{ "secret": true }] }`, unlike `Can` and
   `Filter`.
+- `PermittedFields` now leaves out fields that a `cannot` rule's pattern denies. It removed a deny's field strings
+  literally, so `Cannot(read, WorkItem, fields: "cost.*")` removed nothing and `cost.total` stayed listed while
+  `Can(read, item, "cost.total")` returned false.
 
 ## 0.1.0 (2026-10-10)
 

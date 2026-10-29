@@ -220,6 +220,40 @@ public class AbilityTests
         Assert.Equal("Done items are frozen", ex.Message);
     }
 
+    private static readonly SubjectRegistry CostRegistry = new SubjectRegistry()
+        .Add<WorkItem>("WorkItem", s => s.ConditionFields("status").Fields("summary", "cost.total", "cost.budget"));
+
+    [Theory]
+    [InlineData(RuleSemantics.Casl)]
+    [InlineData(RuleSemantics.DenyOverrides)]
+    public void Permitted_fields_leave_out_fields_a_pattern_denies(RuleSemantics semantics)
+    {
+        Ability ability = new AbilityBuilder(CostRegistry, new AbilityOptions { Semantics = semantics })
+            .Can("read", "WorkItem")
+            .Cannot("read", "WorkItem", fields: "cost.*")
+            .Build();
+        WorkItem item = Item();
+
+        Assert.False(ability.Can("read", item, "cost.total"));
+        Assert.Equal(["summary"], ability.PermittedFields("read", item));
+        Assert.Equal(["summary"], ability.PermittedFields("read", "WorkItem"));
+    }
+
+    [Fact]
+    public void Permitted_fields_follow_a_later_allow_after_a_pattern_deny()
+    {
+        Ability ability = new AbilityBuilder(CostRegistry)
+            .Can("read", "WorkItem")
+            .Cannot("read", "WorkItem", fields: "cost.*")
+            .Can("read", "WorkItem", fields: "cost.total")
+            .Build();
+        WorkItem item = Item();
+
+        Assert.True(ability.Can("read", item, "cost.total"));
+        Assert.False(ability.Can("read", item, "cost.budget"));
+        Assert.Equal(["summary", "cost.total"], ability.PermittedFields("read", item));
+    }
+
     [Fact]
     public void Collections_use_mongodb_array_semantics()
     {

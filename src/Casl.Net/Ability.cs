@@ -186,6 +186,12 @@ public sealed class Ability
                     permitted.Add(field);
                 }
             }
+
+            if (rule.Inverted && rule.Fields is not null)
+            {
+                // A pattern such as "cost.*" never equals a listed field, so also drop every field it matches, as Can does.
+                permitted.RemoveAll(field => rule.MatchesField(field));
+            }
         }
 
         if (_options.Semantics == RuleSemantics.Casl)

@@ -52,7 +52,8 @@ These follow CASL:
   rules limited to fields.
 - **`AccessibleBy` ignores `cannot` rules limited to fields.** Hiding a field doesn't hide the row.
 - **`PermittedFields`** lists the fields allowed for an object or a subject type. A rule without fields covers every
-  field the strict registry lists for the subject; pass `fieldsFrom` to say otherwise, or register the fields.
+  field the strict registry lists for the subject; pass `fieldsFrom` to say otherwise, or register the fields. A
+  `cannot` rule with a pattern (`cost.*`) removes every listed field the pattern matches, as `Can` does.
 
 ### Patterns
 
