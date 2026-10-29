@@ -314,6 +314,27 @@ public class AbilityTests
     }
 
     [Theory]
+    [InlineData("x|.*", "someone-else", false)]
+    [InlineData("x|.*", "x-x|.*-", true)]
+    [InlineData(".*", "x-anything-", false)]
+    [InlineData("a]b-c [d] {e} (f) $ ^ \\ # +?", "x-a]b-c [d] {e} (f) $ ^ \\ # +?-", true)]
+    [InlineData("caf\u00e9 \u20ac", "x-caf\u00e9 \u20ac-", true)]
+    [InlineData("\U0001F600", "x-\U0001F600-", true)]
+    public void Placeholder_text_inside_a_regex_is_matched_literally(string slug, string summary, bool expected)
+    {
+        Ability ability = new AbilityBuilder(Registry)
+            .WithVariables(new { user = new { slug } })
+            .Add(RawRule.Parse("""{ "action": "read", "subject": "WorkItem", "conditions": { "summary": { "$regex": "^x-${user.slug}-$" } } }"""))
+            .Add(RawRule.Parse("""{ "action": "list", "subject": "WorkItem", "conditions": { "summary": { "$regex": "^x-${user.slug}-$", "$options": "x" } } }"""))
+            .Build();
+        WorkItem item = new() { Summary = summary };
+
+        Assert.Equal(expected, ability.Can("read", item));
+        Assert.Equal(expected, ability.Filter<WorkItem>("read").Compile()(item));
+        Assert.Equal(expected, ability.Can("list", item)); // spaces and '#' stay literal with 'x' too
+    }
+
+    [Theory]
     [InlineData("""{ "action": "read", "subject": "WorkItem", "conditions": "{\"assigneeId\":\"u7\"}" }""")]
     [InlineData("""{ "action": "read", "subject": "WorkItem", "conditions": [] }""")]
     [InlineData("""{ "action": "read", "subject": "WorkItem", "conditions": 5 }""")]

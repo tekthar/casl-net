@@ -70,6 +70,33 @@ public sealed class PostgresEquivalenceTests(ITestOutputHelper output)
         "a  b # comment $ [^",
     ];
 
+    [PostgresFact]
+    public async Task Placeholder_text_inside_a_regex_is_literal_in_postgres_too()
+    {
+        DbContextOptions<TestDb> options = Postgres.Fresh("casl_regex_placeholders");
+        string[] values = ["x|.*", ".*", "a]b-c [d] {e} (f) $ ^ \\ # +? ' \"", "caf\u00e9 \u20ac \U0001F600", "\t\n", "a.b"];
+        List<WorkItem> items = values.Select((v, i) => new WorkItem { Id = i + 1, Summary = $"x-{v}-" })
+            .Append(new WorkItem { Id = values.Length + 1, Summary = "x-anything-" })
+            .ToList();
+        await using (TestDb seed = new(options))
+        {
+            seed.WorkItems.AddRange(items);
+            await seed.SaveChangesAsync();
+        }
+
+        await using TestDb db = new(options);
+        for (int i = 0; i < values.Length; i++)
+        {
+            Ability ability = new AbilityBuilder(Subjects.Create())
+                .WithVariables(new { user = new { value = values[i] } })
+                .Add(RawRule.Parse("""{ "action": "read", "subject": "WorkItem", "conditions": { "summary": { "$regex": "^x-${user.value}-$" } } }"""))
+                .Build();
+
+            Assert.Equal([i + 1], await db.WorkItems.AccessibleBy(ability).Select(w => w.Id).ToListAsync());
+            Assert.Equal([i + 1], items.Where(w => ability.Can("read", w)).Select(w => w.Id));
+        }
+    }
+
     private static readonly string[] OptionSets = ["", "i", "m", "s", "x", "im", "is", "ix", "mx", "sx", "imx", "isx"];
 
     [PostgresFact]

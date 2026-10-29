@@ -1,3 +1,4 @@
+using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Text.RegularExpressions;
@@ -139,7 +140,8 @@ internal static partial class Placeholders
     public static JsonObject Interpolate(JsonObject conditions, Func<string, JsonNode> resolve) =>
         (JsonObject)Interpolate((JsonNode)conditions, resolve)!;
 
-    private static JsonNode? Interpolate(JsonNode? node, Func<string, JsonNode> resolve)
+    // inRegex: the value is a $regex pattern, so text filled into it is matched literally.
+    private static JsonNode? Interpolate(JsonNode? node, Func<string, JsonNode> resolve, bool inRegex = false)
     {
         switch (node)
         {
@@ -147,7 +149,7 @@ internal static partial class Placeholders
                 JsonObject copy = [];
                 foreach ((string key, JsonNode? value) in obj)
                 {
-                    copy[key] = Interpolate(value, resolve);
+                    copy[key] = Interpolate(value, resolve, key == "$regex");
                 }
 
                 return copy;
@@ -160,14 +162,40 @@ internal static partial class Placeholders
                     return resolve(whole.Groups[1].Value).DeepClone();
                 }
 
-                return JsonValue.Create(PlaceholderPattern().Replace(text, m => resolve(m.Groups[1].Value) switch
+                return JsonValue.Create(PlaceholderPattern().Replace(text, m =>
                 {
-                    JsonValue v when v.TryGetValue(out string? s) => s,
-                    JsonNode n => n.ToJsonString(),
+                    string value = resolve(m.Groups[1].Value) switch
+                    {
+                        JsonValue v when v.TryGetValue(out string? s) => s,
+                        JsonNode n => n.ToJsonString(),
+                    };
+                    return inRegex ? EscapeForRegex(value) : value;
                 }));
             default:
                 return node?.DeepClone();
         }
+    }
+
+    // Every symbol escaped with a backslash, which .NET and PostgreSQL both read as the symbol itself (Regex.Escape
+    // leaves ']' and '-' as they are, which matter inside a character class).
+    private static string EscapeForRegex(string text)
+    {
+        StringBuilder escaped = new(text.Length * 2);
+        for (int i = 0; i < text.Length; i++)
+        {
+            if (!char.IsLetterOrDigit(text[i]) && text[i] != '_')
+            {
+                escaped.Append('\\');
+            }
+
+            escaped.Append(text[i]);
+            if (char.IsHighSurrogate(text[i]) && i + 1 < text.Length && char.IsLowSurrogate(text[i + 1]))
+            {
+                escaped.Append(text[++i]); // one escape for the whole character, not one per half
+            }
+        }
+
+        return escaped.ToString();
     }
 }
 
