@@ -37,5 +37,13 @@ public sealed class AbilityOptions
     /// <summary>Message for <see cref="ForbiddenException"/> when no rule gives a reason. CASL's default: Cannot execute "action" on "Subject".</summary>
     public Func<ForbiddenException, string>? ForbiddenMessage { get; init; }
 
+    /// <summary>
+    /// How long one <c>$regex</c> match may run in memory before the check throws
+    /// <see cref="System.Text.RegularExpressions.RegexMatchTimeoutException"/> instead of deciding. 100 ms by default,
+    /// so a costly pattern from a rule author can't hold a request thread; <see cref="Timeout.InfiniteTimeSpan"/> for
+    /// no limit. In SQL the database's own limits apply.
+    /// </summary>
+    public TimeSpan RegexMatchTimeout { get; init; } = TimeSpan.FromMilliseconds(100);
+
     internal static AbilityOptions Default { get; } = new();
 }

@@ -384,7 +384,7 @@ public sealed class Ability
             SubjectDefinition definition = _subjects.For(key.Subject, key.Type);
             ParameterExpression obj = Expression.Parameter(typeof(object), "obj");
             ParameterExpression x = Expression.Variable(key.Type, "x");
-            Expression body = new ExpressionBuilder(definition, nullSafe: true).Build(key.Rule.Condition!, x);
+            Expression body = new ExpressionBuilder(definition, nullSafe: true, _options.RegexMatchTimeout).Build(key.Rule.Condition!, x);
             return Expression.Lambda<Func<object, bool>>(
                 Expression.Block([x], Expression.Assign(x, Expression.Convert(obj, key.Type)), body), obj).Compile();
         });

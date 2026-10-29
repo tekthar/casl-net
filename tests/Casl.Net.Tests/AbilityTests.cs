@@ -358,6 +358,55 @@ public class AbilityTests
         Assert.NotEmpty(AbilityBuilder.Validate(rule, Registry));
     }
 
+    [Fact]
+    public void A_costly_regex_times_out_instead_of_holding_the_thread()
+    {
+        Ability ability = new AbilityBuilder(Registry)
+            .Add(RawRule.Parse("""{ "action": "read", "subject": "WorkItem", "conditions": { "summary": { "$regex": "^(a|a?)+$" } } }"""))
+            .Build();
+        WorkItem item = new() { Summary = new string('a', 40) + "!" }; // years of backtracking without a limit
+
+        System.Diagnostics.Stopwatch watch = System.Diagnostics.Stopwatch.StartNew();
+        Assert.Throws<System.Text.RegularExpressions.RegexMatchTimeoutException>(() => ability.Can("read", item));
+        Assert.True(watch.Elapsed < TimeSpan.FromSeconds(5), $"took {watch.Elapsed}");
+        Assert.True(ability.Can("read", new WorkItem { Summary = "aaa" }));
+    }
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(-5)]
+    public void Regex_match_timeout_must_be_positive(int milliseconds)
+    {
+        AbilityOptions options = new() { RegexMatchTimeout = TimeSpan.FromMilliseconds(milliseconds) };
+
+        Assert.Throws<CaslConfigurationException>(() => new AbilityBuilder(Registry, options).Can("read", "WorkItem").Build());
+    }
+
+    [Fact]
+    public void Regex_match_timeout_can_be_switched_off()
+    {
+        AbilityOptions options = new() { RegexMatchTimeout = Timeout.InfiniteTimeSpan };
+        Ability ability = new AbilityBuilder(Registry, options)
+            .Add(RawRule.Parse("""{ "action": "read", "subject": "WorkItem", "conditions": { "summary": { "$regex": "^a+$" } } }"""))
+            .Build();
+
+        Assert.True(ability.Can("read", new WorkItem { Summary = "aaa" }));
+    }
+
+    [Fact]
+    public void Field_patterns_match_in_linear_time()
+    {
+        Ability ability = new AbilityBuilder(Registry)
+            .Add(RawRule.Parse("""{ "action": "read", "subject": "WorkItem", "fields": ["**.**.**.**.**.**.**.**.zz"] }"""))
+            .Build();
+        string longField = string.Join('.', Enumerable.Repeat("a", 200)); // C(199, 8) splits to try when backtracking
+
+        System.Diagnostics.Stopwatch watch = System.Diagnostics.Stopwatch.StartNew();
+        Assert.False(ability.Can("read", "WorkItem", longField));
+        Assert.True(watch.Elapsed < TimeSpan.FromSeconds(5), $"took {watch.Elapsed}");
+        Assert.True(ability.Can("read", "WorkItem", longField + ".zz"));
+    }
+
     // A rule author learns nothing about members the registry doesn't list, whichever operator they try.
     [Theory]
     [InlineData("""{ "nope": { "$elemMatch": { "a": 1 } } }""")]

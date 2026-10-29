@@ -114,6 +114,12 @@ public sealed class AbilityBuilder
     /// </summary>
     public Ability Build()
     {
+        if (_options.RegexMatchTimeout != Timeout.InfiniteTimeSpan
+            && (_options.RegexMatchTimeout <= TimeSpan.Zero || _options.RegexMatchTimeout > TimeSpan.FromDays(24)))
+        {
+            throw new CaslConfigurationException("RegexMatchTimeout must be positive and at most 24 days, or Timeout.InfiniteTimeSpan.");
+        }
+
         ActionAliases? aliases = _options.Aliases;
         List<Rule> rules = new(_rules.Count);
         for (int i = 0; i < _rules.Count; i++)

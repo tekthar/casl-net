@@ -16,7 +16,7 @@ namespace Casl;
 /// - In-memory mode adds null checks along navigations so a missing related object reads as null,
 ///   the way a LEFT JOIN does in SQL.
 /// </summary>
-internal sealed class ExpressionBuilder(SubjectDefinition subject, bool nullSafe)
+internal sealed class ExpressionBuilder(SubjectDefinition subject, bool nullSafe, TimeSpan? regexTimeout = null)
 {
     private static readonly MethodInfo EnumerableAny = typeof(Enumerable).GetMethods()
         .Single(m => m.Name == nameof(Enumerable.Any) && m.GetParameters().Length == 2);
@@ -32,6 +32,9 @@ internal sealed class ExpressionBuilder(SubjectDefinition subject, bool nullSafe
 
     private static readonly MethodInfo RegexIsMatch = typeof(System.Text.RegularExpressions.Regex)
         .GetMethod(nameof(System.Text.RegularExpressions.Regex.IsMatch), [typeof(string), typeof(string)])!;
+
+    private static readonly MethodInfo RegexInstanceIsMatch = typeof(System.Text.RegularExpressions.Regex)
+        .GetMethod(nameof(System.Text.RegularExpressions.Regex.IsMatch), [typeof(string)])!;
 
     private static readonly MethodInfo RegexIsMatchWithOptions = typeof(System.Text.RegularExpressions.Regex)
         .GetMethod(nameof(System.Text.RegularExpressions.Regex.IsMatch), [typeof(string), typeof(string), typeof(System.Text.RegularExpressions.RegexOptions)])!;
@@ -193,9 +196,19 @@ internal sealed class ExpressionBuilder(SubjectDefinition subject, bool nullSafe
 
         // The same pattern runs in memory and in SQL, rewritten so .NET and the database agree.
         string portable = PortableRegex.Rewrite(pattern, options, path);
-        Expression match = options == System.Text.RegularExpressions.RegexOptions.None
-            ? Expression.Call(RegexIsMatch, member, Box(portable, typeof(string)))
-            : Expression.Call(RegexIsMatchWithOptions, member, Box(portable, typeof(string)), Expression.Constant(options));
+        Expression match;
+        if (nullSafe)
+        {
+            // In memory: one prebuilt Regex per rule, with a match timeout, because rule authors choose the pattern.
+            System.Text.RegularExpressions.Regex regex = new(portable, options, regexTimeout ?? System.Text.RegularExpressions.Regex.InfiniteMatchTimeout);
+            match = Expression.Call(Expression.Constant(regex), RegexInstanceIsMatch, member);
+        }
+        else
+        {
+            match = options == System.Text.RegularExpressions.RegexOptions.None
+                ? Expression.Call(RegexIsMatch, member, Box(portable, typeof(string)))
+                : Expression.Call(RegexIsMatchWithOptions, member, Box(portable, typeof(string)), Expression.Constant(options));
+        }
         // Also in SQL: without the guard, NULL REGEXP gives NULL, and NOT NULL stays NULL, so $nor would drop the row.
         return Expression.AndAlso(Expression.NotEqual(member, Expression.Constant(null, typeof(string))), match);
     }
