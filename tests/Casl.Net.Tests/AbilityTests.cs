@@ -59,6 +59,45 @@ public class AbilityTests
     }
 
     [Fact]
+    public void Mongo_query_with_deny_overrides_keeps_cannot_rules_whatever_the_order()
+    {
+        Ability denyFirst = new AbilityBuilder(Registry, DenyOverrides)
+            .Cannot("read", "WorkItem", new { status = "Done" })
+            .Can("read", "WorkItem")
+            .Build();
+        Ability conditionalAllow = new AbilityBuilder(Registry, DenyOverrides)
+            .Cannot("read", "WorkItem", new { status = "Done" })
+            .Can("read", "WorkItem", new { assigneeId = "u1" })
+            .Can("read", "WorkItem", new { priority = 5 })
+            .Build();
+
+        Assert.Equal("""{"$nor":[{"status":"Done"}]}""", denyFirst.ToMongoQuery("read", "WorkItem")?.ToJsonString());
+        Assert.Equal(
+            """{"$and":[{"$or":[{"priority":5},{"assigneeId":"u1"}]},{"$nor":[{"status":"Done"}]}]}""",
+            conditionalAllow.ToMongoQuery("read", "WorkItem")?.ToJsonString());
+    }
+
+    [Fact]
+    public void Mongo_query_with_deny_overrides_edge_cases()
+    {
+        Ability everything = new AbilityBuilder(Registry, DenyOverrides).Can("read", "WorkItem").Build();
+        Ability onlyDenies = new AbilityBuilder(Registry, DenyOverrides).Cannot("read", "WorkItem", new { status = "Done" }).Build();
+        Ability unconditionalDeny = new AbilityBuilder(Registry, DenyOverrides)
+            .Can("read", "WorkItem", new { assigneeId = "u1" })
+            .Cannot("read", "WorkItem")
+            .Build();
+        Ability fieldDeny = new AbilityBuilder(Registry, DenyOverrides)
+            .Cannot("read", "WorkItem", fields: "priority")
+            .Can("read", "WorkItem", new { assigneeId = "u1" })
+            .Build();
+
+        Assert.Equal("{}", everything.ToMongoQuery("read", "WorkItem")?.ToJsonString());
+        Assert.Null(onlyDenies.ToMongoQuery("read", "WorkItem"));
+        Assert.Null(unconditionalDeny.ToMongoQuery("read", "WorkItem"));
+        Assert.Equal("""{"assigneeId":"u1"}""", fieldDeny.ToMongoQuery("read", "WorkItem")?.ToJsonString());
+    }
+
+    [Fact]
     public void Named_fields_are_granted_only_by_rules_that_name_them()
     {
         Ability member = new AbilityBuilder(Registry, DenyOverrides).Can("read", "WorkItem").Build();
@@ -134,6 +173,30 @@ public class AbilityTests
         Assert.Throws<CaslConfigurationException>(builder.Build);
     }
 
+    [Theory]
+    [InlineData("""{ "action": "update", "subject": "WorkItem", "conditions": { "assigneeId": "${user.id}" } }""")]
+    [InlineData("""{ "action": "update", "subject": "WorkItem", "inverted": true, "conditions": { "assigneeId": "${user.id}" } }""")]
+    [InlineData("""{ "action": "update", "subject": "WorkItem", "conditions": { "summary": { "$regex": "^${user.id}-" } } }""")]
+    public void Null_placeholder_fails_the_build(string rule)
+    {
+        AbilityBuilder builder = new AbilityBuilder(Registry)
+            .WithVariables(new { user = new { id = (string?)null } })
+            .Add(RawRule.Parse(rule));
+
+        CaslConfigurationException error = Assert.Throws<CaslConfigurationException>(builder.Build);
+        Assert.Contains("${user.id}", error.Message);
+    }
+
+    [Fact]
+    public void Null_placeholder_from_a_json_object_fails_the_build()
+    {
+        AbilityBuilder builder = new AbilityBuilder(Registry)
+            .Add(RawRule.Parse("""{ "action": "update", "subject": "WorkItem", "conditions": { "assigneeId": "${user.id}" } }"""),
+                JsonNode.Parse("""{ "user": { "id": null } }""")!);
+
+        Assert.Throws<CaslConfigurationException>(builder.Build);
+    }
+
     [Fact]
     public void Field_rules_follow_casl()
     {
@@ -155,6 +218,40 @@ public class AbilityTests
 
         ForbiddenException ex = Assert.Throws<ForbiddenException>(() => ability.EnsureCan("update", done, "status"));
         Assert.Equal("Done items are frozen", ex.Message);
+    }
+
+    private static readonly SubjectRegistry CostRegistry = new SubjectRegistry()
+        .Add<WorkItem>("WorkItem", s => s.ConditionFields("status").Fields("summary", "cost.total", "cost.budget"));
+
+    [Theory]
+    [InlineData(RuleSemantics.Casl)]
+    [InlineData(RuleSemantics.DenyOverrides)]
+    public void Permitted_fields_leave_out_fields_a_pattern_denies(RuleSemantics semantics)
+    {
+        Ability ability = new AbilityBuilder(CostRegistry, new AbilityOptions { Semantics = semantics })
+            .Can("read", "WorkItem")
+            .Cannot("read", "WorkItem", fields: "cost.*")
+            .Build();
+        WorkItem item = Item();
+
+        Assert.False(ability.Can("read", item, "cost.total"));
+        Assert.Equal(["summary"], ability.PermittedFields("read", item));
+        Assert.Equal(["summary"], ability.PermittedFields("read", "WorkItem"));
+    }
+
+    [Fact]
+    public void Permitted_fields_follow_a_later_allow_after_a_pattern_deny()
+    {
+        Ability ability = new AbilityBuilder(CostRegistry)
+            .Can("read", "WorkItem")
+            .Cannot("read", "WorkItem", fields: "cost.*")
+            .Can("read", "WorkItem", fields: "cost.total")
+            .Build();
+        WorkItem item = Item();
+
+        Assert.True(ability.Can("read", item, "cost.total"));
+        Assert.False(ability.Can("read", item, "cost.budget"));
+        Assert.Equal(["summary", "cost.total"], ability.PermittedFields("read", item));
     }
 
     [Fact]
@@ -214,6 +311,58 @@ public class AbilityTests
         RawRule rule = RawRule.Can("read", "WorkItem", conditions);
         CaslConfigurationException ex = Assert.Throws<CaslConfigurationException>(() => new AbilityBuilder(Registry).Add(rule).Build());
         Assert.Contains(message, ex.Message);
+    }
+
+    // Each of these means something else in PostgreSQL (or isn't supported there), so SQL and Can would disagree.
+    [Theory]
+    [InlineData("""\\bconfidential\\b""", "", "'\\b'")]
+    [InlineData("""\\B""", "", "'\\B'")]
+    [InlineData("""^\\d+$""", "", "'\\d'")]
+    [InlineData("""\\w""", "", "'\\w'")]
+    [InlineData("""a\\sc""", "", "'\\s'")]
+    [InlineData("""[\\d]""", "", "'\\d'")]
+    [InlineData("""\\Aabc""", "", "'\\A'")]
+    [InlineData("""abc\\Z""", "", "'\\Z'")]
+    [InlineData("""\\p{L}""", "", "'\\p'")]
+    [InlineData("""\\x61""", "", "'\\x'")]
+    [InlineData("""(a)\\1""", "", "'\\1'")]
+    [InlineData("""(?<n>a)""", "", "group")]
+    [InlineData("""(?>a+)b""", "", "group")]
+    [InlineData("""(?i)abc""", "", "group")]
+    [InlineData("""[[:alpha:]]""", "", "inside a character class")]
+    [InlineData("""[a-z-[aeiou]]""", "", "inside a character class")]
+    [InlineData("""a.b""", "ms", "can't combine 'm' and 's'")]
+    public void Regex_constructs_databases_read_differently_are_refused(string pattern, string options, string message)
+    {
+        string conditions = $$"""{ "summary": { "$regex": "{{pattern}}", "$options": "{{options}}" } }""";
+        CaslConfigurationException ex = Assert.Throws<CaslConfigurationException>(
+            () => new AbilityBuilder(Registry).Add(RawRule.Can("read", "WorkItem", conditions)).Build());
+        Assert.Contains(message, ex.Message);
+    }
+
+    [Theory]
+    [InlineData("abc$", "", "abc\n", false)] // .NET's $ also matches before a final newline; PostgreSQL's doesn't
+    [InlineData("abc$", "", "abc", true)]
+    [InlineData("abc$", "m", "abc\nx", true)]
+    [InlineData("a[^x]b", "", "a\nb", false)] // PostgreSQL's [^x] doesn't match a newline unless only 's' is set
+    [InlineData("a[^x]b", "m", "a\nb", false)]
+    [InlineData("a[^x]b", "s", "a\nb", true)]
+    [InlineData("a[^x]b", "", "a-b", true)]
+    [InlineData("^[^]a]$", "", "]", false)]
+    [InlineData("^[^]a]$", "", "b", true)]
+    [InlineData("x[^\\]]y", "", "x-y", true)]
+    [InlineData("a b # $ [^ comment", "x", "ab", true)]
+    [InlineData("^\\[DELETED\\]\\.$", "i", "[deleted].", true)]
+    public void Regex_newlines_match_as_in_the_database(string pattern, string options, string summary, bool expected)
+    {
+        JsonObject regex = new() { ["$regex"] = pattern, ["$options"] = options };
+        Ability ability = new AbilityBuilder(Registry)
+            .Add(RawRule.Can("read", "WorkItem", new JsonObject { ["summary"] = regex }))
+            .Build();
+        WorkItem item = new() { Summary = summary };
+
+        Assert.Equal(expected, ability.Can("read", item));
+        Assert.Equal(expected, ability.Filter<WorkItem>("read").Compile()(item));
     }
 
     [Fact]

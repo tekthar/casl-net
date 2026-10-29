@@ -133,7 +133,8 @@ var ability = new AbilityBuilder(subjects)
   array, a number, an object. A placeholder inside a longer string is written as text (`"team-${user.id}"`).
 - Variables are anonymous objects, dictionaries or `JsonObject`s, looked up by dotted path, ignoring case.
 - Variables given to `Add` or `AddRange` apply to those rules only and win over `WithVariables`.
-- **A placeholder with no value fails the build.** Dropping it silently could grant more or less than intended.
+- **A placeholder with no value fails the build**, whether the variable is missing or null. Dropping it silently could
+  grant more or less than intended: `{ "assigneeId": "${user.id}" }` with a null id would match every unassigned item.
 
 ## Rules fail closed
 

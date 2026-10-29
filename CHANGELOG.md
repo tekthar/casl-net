@@ -4,6 +4,31 @@ All notable changes to CASL .NET (`Casl.Net` on NuGet) and its browser companion
 [Semantic Versioning](https://semver.org); before 1.0, a minor version (0.2, 0.3) may change the API, and this file
 says how.
 
+## Unreleased
+
+**Security**
+- A placeholder whose variable is null now fails the build, as a missing one already did. Before, a null variable was
+  filled in as JSON null (a whole placeholder) or as empty text (inside a longer string), so `{ "assigneeId":
+  "${user.id}" }` with a null id matched every unassigned record, in memory and in SQL, and a `cannot` rule written the
+  same way stopped denying. Abilities built with null variables now throw `CaslConfigurationException`.
+- `ToMongoQuery` now follows `RuleSemantics.DenyOverrides`. It used CASL's "last rule wins" whatever the semantics, so
+  a `cannot` rule added before an allow rule was left out: `Cannot(read, Post, { secret: true })` then
+  `Can(read, Post)` gave `{}` (every document) instead of `{ "$nor": [{ "secret": true }] }`, unlike `Can` and
+  `Filter`.
+- `PermittedFields` now leaves out fields that a `cannot` rule's pattern denies. It removed a deny's field strings
+  literally, so `Cannot(read, WorkItem, fields: "cost.*")` removed nothing and `cost.total` stayed listed while
+  `Can(read, item, "cost.total")` returned false.
+- `$regex` now decides the same in memory and on PostgreSQL. The pattern ran as .NET syntax in memory but as
+  PostgreSQL syntax in SQL, so `{ "$regex": "\\bconfidential\\b" }` in a `cannot` rule denied in `Can` but matched
+  nothing in `AccessibleBy` (`\b` is a backspace in PostgreSQL), which returned the rows `Can` refused.
+  - **Breaking:** constructs PostgreSQL reads differently now fail the build: `\d \D \w \W \s \S \b \B \A \Z \z \G`,
+    `\p{…}`, `\x…`, back-references and octal escapes, named, atomic and conditional groups, inline options, POSIX
+    classes and class subtraction, and the options `m` and `s` together. See
+    [Conditions](docs/conditions.md#text) for replacements.
+  - Without `m`, `$` no longer matches before a final newline, and unless `s` is set, `[^…]` no longer matches a
+    newline, in memory and on SQLite too, as on PostgreSQL.
+  - A pattern is now validated with its `$options`, so one that is valid only without them fails the build.
+
 ## 0.1.0 (2026-10-10)
 
 The first release.
