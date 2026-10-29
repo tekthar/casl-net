@@ -58,7 +58,9 @@ the predicate is, in effect, `(projectId IN @p0 OR assigneeId = @p1) AND NOT (st
 
 The library only builds LINQ expressions, so it works with any provider that translates them. Its own tests run the
 rules on SQLite through EF Core: 400 random rule sets, two actions each, against 120 entities, under both semantics,
-compare every SQL result with the in-memory check. It's used with PostgreSQL (Npgsql) as well.
+compare every SQL result with the in-memory check. The same test, plus a `$regex` comparison over texts that tell
+regular expression engines apart, runs on PostgreSQL through Npgsql in the `postgres` workflow
+(`tests/Casl.Net.PostgresTests`).
 
 Two things depend on the provider:
 - **`$regex`** becomes `Regex.IsMatch`, which PostgreSQL and SQLite translate and some providers don't. A predicate EF

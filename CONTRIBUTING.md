@@ -6,6 +6,9 @@ Thanks for helping. Issues and pull requests are welcome.
 
 1. Run `dotnet test`. It must pass on .NET 8 and .NET 10 with warnings treated as errors.
 2. Run the CASL compatibility test: `cd tests/casl-compat && npm install && npm test`.
+   With a PostgreSQL server at hand, also run the PostgreSQL tests, which `dotnet test` skips otherwise:
+   `CASL_POSTGRES="Host=localhost;Username=postgres;Password=..." dotnet test tests/Casl.Net.PostgresTests`. The optional
+   `postgres` workflow runs them on every pull request.
 3. If you change semantics or add an operator, add cases to `tests/Casl.Net.Tests/RandomRules.cs` so the equivalence and CASL tests cover it.
 4. Sign off your commits (`git commit -s`). By signing off you certify the [Developer Certificate of Origin](https://developercertificate.org/): you wrote the change or have the right to submit it under the project's licence.
 
