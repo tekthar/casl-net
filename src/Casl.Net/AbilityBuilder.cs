@@ -160,6 +160,12 @@ public sealed class AbilityBuilder
             throw new CaslConfigurationException("The `rawRule.fields` array cannot be empty.");
         }
 
+        if (rule.Subject is { Count: 0 })
+        {
+            // Read as "no subject", it would become a rule on every subject.
+            throw new CaslConfigurationException("A rule's subject list can't be empty; leave the subject out for a claim rule.");
+        }
+
         IReadOnlyList<string> subjectNames = rule.Subject is { Count: > 0 } s ? s : [options.AnySubjectType];
         foreach (string subject in subjectNames)
         {

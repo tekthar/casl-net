@@ -67,7 +67,12 @@ internal sealed class RawRuleJsonConverter : JsonConverter<RawRule>
         {
             Action = StringOrArray(obj["action"], "action") ?? throw new JsonException("A rule needs an 'action'."),
             Subject = StringOrArray(obj["subject"], "subject"),
-            Conditions = obj["conditions"] is JsonObject c ? (JsonObject)c.DeepClone() : null,
+            Conditions = obj["conditions"] switch
+            {
+                null => null,
+                JsonObject c => (JsonObject)c.DeepClone(),
+                _ => throw new JsonException("'conditions' must be an object."), // dropping it would make the rule unconditional
+            },
             Fields = StringOrArray(obj["fields"], "fields"),
             Inverted = obj["inverted"]?.GetValue<bool>() ?? false,
             Reason = obj["reason"]?.GetValue<string>(),

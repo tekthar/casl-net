@@ -313,6 +313,30 @@ public class AbilityTests
         Assert.Contains(message, ex.Message);
     }
 
+    [Theory]
+    [InlineData("""{ "action": "read", "subject": "WorkItem", "conditions": "{\"assigneeId\":\"u7\"}" }""")]
+    [InlineData("""{ "action": "read", "subject": "WorkItem", "conditions": [] }""")]
+    [InlineData("""{ "action": "read", "subject": "WorkItem", "conditions": 5 }""")]
+    public void Conditions_that_are_not_an_object_are_refused(string json) =>
+        Assert.Throws<System.Text.Json.JsonException>(() => RawRule.Parse(json));
+
+    [Fact]
+    public void Null_conditions_mean_none()
+    {
+        RawRule rule = RawRule.Parse("""{ "action": "read", "subject": "WorkItem", "conditions": null }""");
+
+        Assert.Null(rule.Conditions);
+    }
+
+    [Fact]
+    public void An_empty_subject_list_is_refused()
+    {
+        RawRule rule = RawRule.Parse("""{ "action": "delete", "subject": [] }""");
+
+        Assert.Throws<CaslConfigurationException>(() => new AbilityBuilder(Registry).Add(rule).Build());
+        Assert.NotEmpty(AbilityBuilder.Validate(rule, Registry));
+    }
+
     // A rule author learns nothing about members the registry doesn't list, whichever operator they try.
     [Theory]
     [InlineData("""{ "nope": { "$elemMatch": { "a": 1 } } }""")]
