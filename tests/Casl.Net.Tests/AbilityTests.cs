@@ -134,6 +134,30 @@ public class AbilityTests
         Assert.Throws<CaslConfigurationException>(builder.Build);
     }
 
+    [Theory]
+    [InlineData("""{ "action": "update", "subject": "WorkItem", "conditions": { "assigneeId": "${user.id}" } }""")]
+    [InlineData("""{ "action": "update", "subject": "WorkItem", "inverted": true, "conditions": { "assigneeId": "${user.id}" } }""")]
+    [InlineData("""{ "action": "update", "subject": "WorkItem", "conditions": { "summary": { "$regex": "^${user.id}-" } } }""")]
+    public void Null_placeholder_fails_the_build(string rule)
+    {
+        AbilityBuilder builder = new AbilityBuilder(Registry)
+            .WithVariables(new { user = new { id = (string?)null } })
+            .Add(RawRule.Parse(rule));
+
+        CaslConfigurationException error = Assert.Throws<CaslConfigurationException>(builder.Build);
+        Assert.Contains("${user.id}", error.Message);
+    }
+
+    [Fact]
+    public void Null_placeholder_from_a_json_object_fails_the_build()
+    {
+        AbilityBuilder builder = new AbilityBuilder(Registry)
+            .Add(RawRule.Parse("""{ "action": "update", "subject": "WorkItem", "conditions": { "assigneeId": "${user.id}" } }"""),
+                JsonNode.Parse("""{ "user": { "id": null } }""")!);
+
+        Assert.Throws<CaslConfigurationException>(builder.Build);
+    }
+
     [Fact]
     public void Field_rules_follow_casl()
     {

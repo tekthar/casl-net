@@ -126,7 +126,7 @@ internal static class ConditionParser
 /// <summary>
 /// Replaces placeholders in conditions. A string that is exactly <c>"${user.groupIds}"</c> becomes the variable's
 /// value, of any JSON type (an array, a number...). Placeholders inside a longer string are formatted as text.
-/// A placeholder with no value fails the build: silently dropping it could widen or narrow access.
+/// A placeholder with no value, missing or null, fails the build: silently dropping it could widen or narrow access.
 /// </summary>
 internal static partial class Placeholders
 {
@@ -136,10 +136,10 @@ internal static partial class Placeholders
     public static bool IsWholePlaceholder(JsonNode? node) =>
         node is JsonValue v && v.TryGetValue(out string? s) && PlaceholderPattern().Match(s) is { Success: true } m && m.Length == s.Length;
 
-    public static JsonObject Interpolate(JsonObject conditions, Func<string, JsonNode?> resolve) =>
+    public static JsonObject Interpolate(JsonObject conditions, Func<string, JsonNode> resolve) =>
         (JsonObject)Interpolate((JsonNode)conditions, resolve)!;
 
-    private static JsonNode? Interpolate(JsonNode? node, Func<string, JsonNode?> resolve)
+    private static JsonNode? Interpolate(JsonNode? node, Func<string, JsonNode> resolve)
     {
         switch (node)
         {
@@ -157,14 +157,13 @@ internal static partial class Placeholders
                 Match whole = PlaceholderPattern().Match(text);
                 if (whole.Success && whole.Length == text.Length)
                 {
-                    return resolve(whole.Groups[1].Value)?.DeepClone();
+                    return resolve(whole.Groups[1].Value).DeepClone();
                 }
 
                 return JsonValue.Create(PlaceholderPattern().Replace(text, m => resolve(m.Groups[1].Value) switch
                 {
                     JsonValue v when v.TryGetValue(out string? s) => s,
                     JsonNode n => n.ToJsonString(),
-                    null => string.Empty,
                 }));
             default:
                 return node?.DeepClone();
@@ -200,13 +199,16 @@ internal sealed class VariableScope
         return scope;
     }
 
-    public JsonNode? Resolve(string path)
+    public JsonNode Resolve(string path)
     {
         foreach (JsonObject layer in _layers)
         {
             if (TryResolve(layer, path, out JsonNode? value))
             {
-                return value;
+                // A null variable has no value either: as JSON null it would match every row where the member is null.
+                return value is null || value.GetValueKind() == JsonValueKind.Null
+                    ? throw new CaslConfigurationException($"Placeholder '${{{path}}}' is null.")
+                    : value;
             }
         }
 

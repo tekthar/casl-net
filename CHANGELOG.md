@@ -4,6 +4,14 @@ All notable changes to CASL .NET (`Casl.Net` on NuGet) and its browser companion
 [Semantic Versioning](https://semver.org); before 1.0, a minor version (0.2, 0.3) may change the API, and this file
 says how.
 
+## Unreleased
+
+**Security**
+- A placeholder whose variable is null now fails the build, as a missing one already did. Before, a null variable was
+  filled in as JSON null (a whole placeholder) or as empty text (inside a longer string), so `{ "assigneeId":
+  "${user.id}" }` with a null id matched every unassigned record, in memory and in SQL, and a `cannot` rule written the
+  same way stopped denying. Abilities built with null variables now throw `CaslConfigurationException`.
+
 ## 0.1.0 (2026-10-10)
 
 The first release.
