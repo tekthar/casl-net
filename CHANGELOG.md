@@ -28,6 +28,21 @@ says how.
   - Without `m`, `$` no longer matches before a final newline, and unless `s` is set, `[^…]` no longer matches a
     newline, in memory and on SQLite too, as on PostgreSQL.
   - A pattern is now validated with its `$options`, so one that is valid only without them fails the build.
+- Placeholder text inside a `$regex` pattern is now matched literally. It was filled in as raw text, so a variable
+  such as a self-chosen slug `x|.*` turned `"^/teams/${user.slug}/"` into a pattern matching every value. A pattern
+  that is exactly one placeholder is still used as it is.
+- In-memory `$regex` matches stop after `AbilityOptions.RegexMatchTimeout` (100 ms by default) and throw
+  `RegexMatchTimeoutException`, so a costly pattern from a rule author can't hold a request thread. Field patterns
+  (`**.**.zz`) match in linear time.
+- With a strict registry, `$elemMatch` on a path the registry doesn't list now fails with the same "not allowed"
+  message as any other condition. It used to say whether the member existed and what type it had.
+- A rule whose `conditions` isn't an object (a string, an array, a number) or whose subject list is empty now fails.
+  The first used to be dropped, making the rule unconditional, and the second became a rule on every subject.
+
+**Added**
+- `AbilityOptions.RegexMatchTimeout`.
+- `tests/Casl.Net.PostgresTests` and the optional `postgres` workflow: the equivalence test and `$regex` comparisons on
+  a real PostgreSQL, run when `CASL_POSTGRES` holds a connection string.
 
 ## 0.1.0 (2026-10-10)
 
