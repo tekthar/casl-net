@@ -313,6 +313,126 @@ public class AbilityTests
         Assert.Contains(message, ex.Message);
     }
 
+    [Theory]
+    [InlineData("x|.*", "someone-else", false)]
+    [InlineData("x|.*", "x-x|.*-", true)]
+    [InlineData(".*", "x-anything-", false)]
+    [InlineData("a]b-c [d] {e} (f) $ ^ \\ # +?", "x-a]b-c [d] {e} (f) $ ^ \\ # +?-", true)]
+    [InlineData("caf\u00e9 \u20ac", "x-caf\u00e9 \u20ac-", true)]
+    [InlineData("\U0001F600", "x-\U0001F600-", true)]
+    public void Placeholder_text_inside_a_regex_is_matched_literally(string slug, string summary, bool expected)
+    {
+        Ability ability = new AbilityBuilder(Registry)
+            .WithVariables(new { user = new { slug } })
+            .Add(RawRule.Parse("""{ "action": "read", "subject": "WorkItem", "conditions": { "summary": { "$regex": "^x-${user.slug}-$" } } }"""))
+            .Add(RawRule.Parse("""{ "action": "list", "subject": "WorkItem", "conditions": { "summary": { "$regex": "^x-${user.slug}-$", "$options": "x" } } }"""))
+            .Build();
+        WorkItem item = new() { Summary = summary };
+
+        Assert.Equal(expected, ability.Can("read", item));
+        Assert.Equal(expected, ability.Filter<WorkItem>("read").Compile()(item));
+        Assert.Equal(expected, ability.Can("list", item)); // spaces and '#' stay literal with 'x' too
+    }
+
+    [Theory]
+    [InlineData("""{ "action": "read", "subject": "WorkItem", "conditions": "{\"assigneeId\":\"u7\"}" }""")]
+    [InlineData("""{ "action": "read", "subject": "WorkItem", "conditions": [] }""")]
+    [InlineData("""{ "action": "read", "subject": "WorkItem", "conditions": 5 }""")]
+    public void Conditions_that_are_not_an_object_are_refused(string json) =>
+        Assert.Throws<System.Text.Json.JsonException>(() => RawRule.Parse(json));
+
+    [Fact]
+    public void Null_conditions_mean_none()
+    {
+        RawRule rule = RawRule.Parse("""{ "action": "read", "subject": "WorkItem", "conditions": null }""");
+
+        Assert.Null(rule.Conditions);
+    }
+
+    [Fact]
+    public void An_empty_subject_list_is_refused()
+    {
+        RawRule rule = RawRule.Parse("""{ "action": "delete", "subject": [] }""");
+
+        Assert.Throws<CaslConfigurationException>(() => new AbilityBuilder(Registry).Add(rule).Build());
+        Assert.NotEmpty(AbilityBuilder.Validate(rule, Registry));
+    }
+
+    [Fact]
+    public void A_costly_regex_times_out_instead_of_holding_the_thread()
+    {
+        Ability ability = new AbilityBuilder(Registry)
+            .Add(RawRule.Parse("""{ "action": "read", "subject": "WorkItem", "conditions": { "summary": { "$regex": "^(a|a?)+$" } } }"""))
+            .Build();
+        WorkItem item = new() { Summary = new string('a', 40) + "!" }; // years of backtracking without a limit
+
+        System.Diagnostics.Stopwatch watch = System.Diagnostics.Stopwatch.StartNew();
+        Assert.Throws<System.Text.RegularExpressions.RegexMatchTimeoutException>(() => ability.Can("read", item));
+        Assert.True(watch.Elapsed < TimeSpan.FromSeconds(5), $"took {watch.Elapsed}");
+        Assert.True(ability.Can("read", new WorkItem { Summary = "aaa" }));
+    }
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(-5)]
+    public void Regex_match_timeout_must_be_positive(int milliseconds)
+    {
+        AbilityOptions options = new() { RegexMatchTimeout = TimeSpan.FromMilliseconds(milliseconds) };
+
+        Assert.Throws<CaslConfigurationException>(() => new AbilityBuilder(Registry, options).Can("read", "WorkItem").Build());
+    }
+
+    [Fact]
+    public void Regex_match_timeout_can_be_switched_off()
+    {
+        AbilityOptions options = new() { RegexMatchTimeout = Timeout.InfiniteTimeSpan };
+        Ability ability = new AbilityBuilder(Registry, options)
+            .Add(RawRule.Parse("""{ "action": "read", "subject": "WorkItem", "conditions": { "summary": { "$regex": "^a+$" } } }"""))
+            .Build();
+
+        Assert.True(ability.Can("read", new WorkItem { Summary = "aaa" }));
+    }
+
+    [Fact]
+    public void Field_patterns_match_in_linear_time()
+    {
+        Ability ability = new AbilityBuilder(Registry)
+            .Add(RawRule.Parse("""{ "action": "read", "subject": "WorkItem", "fields": ["**.**.**.**.**.**.**.**.zz"] }"""))
+            .Build();
+        string longField = string.Join('.', Enumerable.Repeat("a", 200)); // C(199, 8) splits to try when backtracking
+
+        System.Diagnostics.Stopwatch watch = System.Diagnostics.Stopwatch.StartNew();
+        Assert.False(ability.Can("read", "WorkItem", longField));
+        Assert.True(watch.Elapsed < TimeSpan.FromSeconds(5), $"took {watch.Elapsed}");
+        Assert.True(ability.Can("read", "WorkItem", longField + ".zz"));
+    }
+
+    // A rule author learns nothing about members the registry doesn't list, whichever operator they try.
+    [Theory]
+    [InlineData("""{ "nope": { "$elemMatch": { "a": 1 } } }""")]
+    [InlineData("""{ "project.name": { "$elemMatch": { "a": 1 } } }""")]
+    [InlineData("""{ "comments.workItemId": { "$elemMatch": { "a": 1 } } }""")]
+    [InlineData("""{ "comments.nope": { "$elemMatch": { "a": 1 } } }""")]
+    public void Elem_match_on_unlisted_paths_gives_the_same_answer(string conditions)
+    {
+        IReadOnlyList<string> problems = AbilityBuilder.Validate(RawRule.Can("read", "WorkItem", conditions), Registry);
+
+        Assert.Contains("not allowed", Assert.Single(problems));
+    }
+
+    [Fact]
+    public void Elem_match_on_a_listed_collection_still_works()
+    {
+        Ability ability = new AbilityBuilder(Registry)
+            .Can("read", "WorkItem", """{ "comments": { "$elemMatch": { "authorId": "u2", "internal": false } } }""")
+            .Build();
+        WorkItem item = Item();
+        item.Comments.Add(new Comment { AuthorId = "u2", Internal = false });
+
+        Assert.True(ability.Can("read", item));
+        Assert.False(ability.Can("read", Item()));
+    }
+
     // Each of these means something else in PostgreSQL (or isn't supported there), so SQL and Can would disagree.
     [Theory]
     [InlineData("""\\bconfidential\\b""", "", "'\\b'")]

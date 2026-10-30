@@ -54,6 +54,7 @@ internal sealed partial class FieldMatcher
 
         List<string> list = patterns.ToList();
         string combined = list.Count > 1 ? $"(?:{string.Join("|", list)})" : list[0];
-        return new Regex($"^{combined}$", RegexOptions.CultureInvariant);
+        // No lookarounds or back-references, so the non-backtracking engine matches in linear time whatever the pattern.
+        return new Regex($"^{combined}$", RegexOptions.CultureInvariant | RegexOptions.NonBacktracking);
     }
 }

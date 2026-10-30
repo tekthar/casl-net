@@ -114,6 +114,12 @@ public sealed class AbilityBuilder
     /// </summary>
     public Ability Build()
     {
+        if (_options.RegexMatchTimeout != Timeout.InfiniteTimeSpan
+            && (_options.RegexMatchTimeout <= TimeSpan.Zero || _options.RegexMatchTimeout > TimeSpan.FromDays(24)))
+        {
+            throw new CaslConfigurationException("RegexMatchTimeout must be positive and at most 24 days, or Timeout.InfiniteTimeSpan.");
+        }
+
         ActionAliases? aliases = _options.Aliases;
         List<Rule> rules = new(_rules.Count);
         for (int i = 0; i < _rules.Count; i++)
@@ -158,6 +164,12 @@ public sealed class AbilityBuilder
         if (rule.Fields is { Count: 0 })
         {
             throw new CaslConfigurationException("The `rawRule.fields` array cannot be empty.");
+        }
+
+        if (rule.Subject is { Count: 0 })
+        {
+            // Read as "no subject", it would become a rule on every subject.
+            throw new CaslConfigurationException("A rule's subject list can't be empty; leave the subject out for a claim rule.");
         }
 
         IReadOnlyList<string> subjectNames = rule.Subject is { Count: > 0 } s ? s : [options.AnySubjectType];

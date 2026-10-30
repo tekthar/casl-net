@@ -1,0 +1,38 @@
+name: postgres
+
+# Optional: runs tests/Casl.Net.PostgresTests against a real PostgreSQL, where Npgsql's SQL (and PostgreSQL's regular
+# expressions) can disagree with the in-memory check in ways the SQLite equivalence test can't show. The ci workflow
+# skips these tests because it sets no CASL_POSTGRES. Make this check required in branch protection to enforce it.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  postgres:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      CASL_POSTGRES: Host=localhost;Port=5432;Username=postgres;Password=postgres
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+      - run: dotnet test tests/Casl.Net.PostgresTests -c Release --logger "console;verbosity=normal"

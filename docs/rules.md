@@ -130,7 +130,9 @@ var ability = new AbilityBuilder(subjects)
 ```
 
 - A string that is exactly a placeholder (`"${user.teamIds}"`) becomes the variable's value, of any JSON type: an
-  array, a number, an object. A placeholder inside a longer string is written as text (`"team-${user.id}"`).
+  array, a number, an object. A placeholder inside a longer string is written as text (`"team-${user.id}"`);
+  inside a `$regex` pattern that text is matched literally, so `"^team-${user.slug}$"` can't be widened by a slug such
+  as `x|.*`.
 - Variables are anonymous objects, dictionaries or `JsonObject`s, looked up by dotted path, ignoring case.
 - Variables given to `Add` or `AddRange` apply to those rules only and win over `WithVariables`.
 - **A placeholder with no value fails the build**, whether the variable is missing or null. Dropping it silently could

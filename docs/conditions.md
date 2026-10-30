@@ -59,6 +59,11 @@ classes and escaped symbols such as `\.` or `\[`, plus `\t`, `\n`, `\r`, `\f`, `
 PostgreSQL's rules, in memory as well: without `m`, `$` matches only at the very end of the text, not before a final
 newline; and unless `s` is set, `[^…]` doesn't match a newline (just as `.` doesn't).
 
+Rule authors choose the pattern, so a match in memory stops after `AbilityOptions.RegexMatchTimeout` (100 ms by
+default) and the check throws `RegexMatchTimeoutException` instead of deciding. In SQL the database's own limits
+apply; on SQLite, EF Core's `REGEXP` runs .NET's engine in your process, bounded only by the process-wide
+`REGEX_DEFAULT_MATCH_TIMEOUT` setting.
+
 ## Logic
 
 ```json
