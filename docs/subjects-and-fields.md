@@ -19,7 +19,7 @@ var subjects = new SubjectRegistry()
     .Add<WorkItem>("WorkItem", s => s
         .ConditionFields("projectId", "assigneeId", "status", "labels", "project.orgUnitId", "comments.authorId")
         .ConditionField(x => x.Priority)                       // the same, from an expression: "priority"
-        .Fields("summary", "status", "assigneeId", "priority"))
+        .Fields("summary", "status", "assigneeId", "priority", "cost.**"))
     .Add<Project>("Project", s => s.ConditionFields("id", "orgUnitId"));
 ```
 
@@ -67,6 +67,11 @@ Rule fields may use CASL's patterns:
 | `*.name` | `author.name`, `editor.name` |
 | `**.name` | `author.name`, `post.author.name` |
 | `street*` | `street`, `streetName` |
+
+With listed fields (a strict registry), an allow rule's patterns reach only the fields the registry lists, as its
+literal fields do: `fields: "**"` grants `summary` but not a `passwordHash` the registry leaves out, and
+`PermittedFields` lists the listed fields a pattern matches. A `cannot` rule's patterns still reach every field, so a
+deny never shrinks. In an open registry, patterns reach any field, as in CASL.
 
 ### Field families
 

@@ -138,6 +138,13 @@ public sealed class SubjectDefinition
 
     internal bool Allows(string path) => AllowAnyPath || ConditionPaths.Contains(path);
 
+    /// <summary>True when rules may only name the fields listed with <see cref="SubjectBuilder{T}.Fields"/>.</summary>
+    internal bool ListsFields => !AllowAnyPath || Fields.Count > 0;
+
+    /// <summary>Whether <paramref name="field"/> is a listed field or one under a listed family ("fields.**").</summary>
+    internal bool HasField(string field) =>
+        Fields.Contains(field) || Fields.Any(f => f.EndsWith(".**", StringComparison.Ordinal) && field.StartsWith(f[..^2], StringComparison.Ordinal));
+
     /// <summary>Whether conditions may use <paramref name="path"/> or a path under it ("comments" for "comments.authorId").</summary>
     internal bool AllowsUnder(string path) =>
         Allows(path) || ConditionPaths.Any(p => p.Length > path.Length && p[path.Length] == '.' && p.StartsWith(path, StringComparison.Ordinal));

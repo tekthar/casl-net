@@ -32,6 +32,15 @@ matches the version, publishes `Casl.Net` to NuGet and `casl-net` to npm through
 and creates a GitHub release with the packages attached. A version already on a registry is skipped, so a failed
 release can be re-run.
 
+The publishing jobs wait in the `release` environment until a reviewer approves them. Set this up once:
+
+1. **Settings → Environments → `release`**: add required reviewers, and under deployment branches and tags allow
+   only tags matching `v*`.
+2. **Settings → Rules → Rulesets**: a tag ruleset on `refs/tags/v*` that only maintainers can bypass, so nobody else
+   can create, move or delete release tags.
+3. **nuget.org → Trusted Publishing** and **npmjs.com → casl-net → Trusted publishers**: set the environment to
+   `release`. The registries then refuse tokens from jobs outside it, even if a tagged commit edits the workflow.
+
 ## Code of conduct
 
 Be respectful and assume good intent. Harassment or discrimination of any kind isn't tolerated. Report problems to the maintainers privately.

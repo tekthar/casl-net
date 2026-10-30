@@ -39,7 +39,15 @@ says how.
 - A rule whose `conditions` isn't an object (a string, an array, a number) or whose subject list is empty now fails.
   The first used to be dropped, making the rule unconditional, and the second became a rule on every subject.
 
+- With listed fields (a strict registry), an allow rule's field patterns now reach only the fields the registry
+  lists, as its literal fields already did. A pattern such as `**` skipped the field allowlist, so it granted fields
+  the registry leaves out, including through `FieldMatch.Named`. `PermittedFields` now lists the listed fields an
+  allow pattern matches instead of the pattern itself. `cannot` patterns still reach every field, and open
+  registries are unchanged.
+
 **Added**
+- The `release` workflow's NuGet and npm jobs run in a `release` environment, and the workflow stops when the tag
+  isn't on `main`. See CONTRIBUTING.md for the environment, tag ruleset and registry settings that make this a gate.
 - `AbilityOptions.RegexMatchTimeout`.
 - `tests/Casl.Net.PostgresTests` and the optional `postgres` workflow: the equivalence test and `$regex` comparisons on
   a real PostgreSQL, run when `CASL_POSTGRES` holds a connection string.

@@ -18,6 +18,7 @@ public sealed class Rule
         Condition = condition;
         Priority = priority;
         _fieldMatcher = origin.Fields is { Count: > 0 } fields ? new FieldMatcher(fields) : null;
+        HasFieldPatterns = origin.Fields?.Any(f => f.Contains('*')) == true;
     }
 
     /// <summary>The rule as defined, with placeholders filled in.</summary>
@@ -45,6 +46,9 @@ public sealed class Rule
     public int Priority { get; }
 
     internal Condition? Condition { get; }
+
+    /// <summary>True when some of the rule's fields are patterns ("cost.*", "**").</summary>
+    internal bool HasFieldPatterns { get; }
 
     /// <summary>
     /// CASL's field check. Without a field (asking about the subject as a whole), a <c>cannot</c> rule limited to
