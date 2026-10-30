@@ -3,6 +3,11 @@ name: release
 # Pushing a tag such as v0.1.0 builds, tests and publishes Casl.Net to NuGet and casl-net to npm through trusted
 # publishing (short-lived credentials from GitHub's OIDC token, no stored API keys), then creates the GitHub release.
 # A version that's already on a registry is skipped, so a failed run can be re-run. See CONTRIBUTING.md.
+#
+# The publishing jobs run in the `release` environment. Give it required reviewers and a deployment tag rule (v*), and
+# name it in the NuGet and npm trusted-publishing policies: the registries then accept only tokens from a job that ran
+# in that environment, so a tag pushed without a reviewer's approval publishes nothing. The check that the tag is on
+# main is a guard against mistakes; it lives in this file, which the tagged commit controls.
 
 on:
   push:
@@ -16,6 +21,14 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # main's history, for the check below
+      - name: The tag is on main
+        run: |
+          if ! git merge-base --is-ancestor "$GITHUB_SHA" origin/main; then
+            echo "::error::$GITHUB_REF_NAME points to a commit that isn't on main. Release from main (CONTRIBUTING.md)."
+            exit 1
+          fi
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: |
@@ -56,6 +69,7 @@ jobs:
   nuget:
     needs: build
     runs-on: ubuntu-latest
+    environment: release
     permissions:
       id-token: write # trusted publishing: GitHub's OIDC token is exchanged for a one-hour NuGet API key
     steps:
@@ -81,6 +95,7 @@ jobs:
   npm:
     needs: build
     runs-on: ubuntu-latest
+    environment: release
     permissions:
       id-token: write # trusted publishing, with provenance
     steps:

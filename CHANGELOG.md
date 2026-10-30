@@ -46,6 +46,8 @@ says how.
   registries are unchanged.
 
 **Added**
+- The `release` workflow's NuGet and npm jobs run in a `release` environment, and the workflow stops when the tag
+  isn't on `main`. See CONTRIBUTING.md for the environment, tag ruleset and registry settings that make this a gate.
 - `AbilityOptions.RegexMatchTimeout`.
 - `tests/Casl.Net.PostgresTests` and the optional `postgres` workflow: the equivalence test and `$regex` comparisons on
   a real PostgreSQL, run when `CASL_POSTGRES` holds a connection string.
