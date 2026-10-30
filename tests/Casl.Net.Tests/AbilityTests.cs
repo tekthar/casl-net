@@ -100,12 +100,12 @@ public class AbilityTests
     [Fact]
     public void Named_fields_are_granted_only_by_rules_that_name_them()
     {
-        Ability member = new AbilityBuilder(Registry, DenyOverrides).Can("read", "WorkItem").Build();
-        Ability finance = new AbilityBuilder(Registry, DenyOverrides)
+        Ability member = new AbilityBuilder(CostRegistry, DenyOverrides).Can("read", "WorkItem").Build();
+        Ability finance = new AbilityBuilder(CostRegistry, DenyOverrides)
             .Can("read", "WorkItem")
             .Can("read", "WorkItem", fields: "cost.*")
             .Build();
-        Ability denied = new AbilityBuilder(Registry, DenyOverrides)
+        Ability denied = new AbilityBuilder(CostRegistry, DenyOverrides)
             .Can("read", "WorkItem", fields: "cost.*")
             .Cannot("read", "WorkItem", new { status = "Done" })
             .Build();
@@ -394,9 +394,50 @@ public class AbilityTests
     }
 
     [Fact]
+    public void Allow_patterns_reach_only_listed_fields()
+    {
+        Ability ability = new AbilityBuilder(CostRegistry).Can("read", "WorkItem", fields: "**").Build();
+        WorkItem item = Item();
+
+        Assert.True(ability.Can("read", item, "summary"));
+        Assert.True(ability.Can("read", item, "cost.total", FieldMatch.Named));
+        Assert.False(ability.Can("read", item, "passwordHash"));
+        Assert.False(ability.Can("read", item, "salary", FieldMatch.Named));
+        Assert.True(ability.Can("read", item)); // the item as a whole, as before
+        Assert.Equal(["summary", "cost.total", "cost.budget"], ability.PermittedFields("read", item));
+    }
+
+    [Fact]
+    public void Allow_patterns_reach_fields_under_a_listed_family()
+    {
+        SubjectRegistry registry = new SubjectRegistry().Add<WorkItem>("WorkItem", s => s.ConditionFields("status").Fields("summary", "fields.**"));
+        Ability ability = new AbilityBuilder(registry).Can("read", "WorkItem", fields: "*.custom.cost").Build();
+
+        Assert.True(ability.Can("read", Item(), "fields.custom.cost"));
+        Assert.False(ability.Can("read", Item(), "other.custom.cost"));
+    }
+
+    [Fact]
+    public void Cannot_patterns_still_reach_every_field()
+    {
+        Ability ability = new AbilityBuilder(CostRegistry).Can("read", "WorkItem").Cannot("read", "WorkItem", fields: "**").Build();
+
+        Assert.False(ability.Can("read", Item(), "summary"));
+        Assert.False(ability.Can("read", Item(), "passwordHash"));
+    }
+
+    [Fact]
+    public void Allow_patterns_reach_any_field_in_an_open_registry()
+    {
+        Ability ability = new AbilityBuilder().Can("read", "Post", fields: "**").Build();
+
+        Assert.True(ability.Can("read", "Post", "anything.at.all"));
+    }
+
+    [Fact]
     public void Field_patterns_match_in_linear_time()
     {
-        Ability ability = new AbilityBuilder(Registry)
+        Ability ability = new AbilityBuilder(new SubjectRegistry().Add<WorkItem>("WorkItem", s => s.Fields("a.**")))
             .Add(RawRule.Parse("""{ "action": "read", "subject": "WorkItem", "fields": ["**.**.**.**.**.**.**.**.zz"] }"""))
             .Build();
         string longField = string.Join('.', Enumerable.Repeat("a", 200)); // C(199, 8) splits to try when backtracking

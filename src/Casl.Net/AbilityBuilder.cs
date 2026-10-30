@@ -200,12 +200,12 @@ public sealed class AbilityBuilder
                 continue; // open registry, unregistered name: checked when an object is matched
             }
 
-            if (!definition!.AllowAnyPath || definition.Fields.Count > 0)
+            if (definition!.ListsFields)
             {
+                // Patterns pass here; Ability.RulesFor keeps an allow rule's patterns to the listed fields.
                 foreach (string field in rule.Fields ?? [])
                 {
-                    if (!field.Contains('*') && !definition.Fields.Contains(field)
-                        && !definition.Fields.Any(f => f.EndsWith(".**", StringComparison.Ordinal) && field.StartsWith(f[..^2], StringComparison.Ordinal)))
+                    if (!field.Contains('*') && !definition.HasField(field))
                     {
                         throw new CaslConfigurationException($"'{subjectName}' has no field '{field}' for field-level rules.");
                     }

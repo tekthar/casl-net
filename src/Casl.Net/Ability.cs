@@ -139,7 +139,16 @@ public sealed class Ability
     public IReadOnlyList<Rule> RulesFor(string action, string? subjectType = null, string? field = null)
     {
         IReadOnlyList<Rule> rules = PossibleRulesFor(action, subjectType);
-        return _hasFieldRules ? rules.Where(r => r.MatchesField(field)).ToList() : rules;
+        if (!_hasFieldRules)
+        {
+            return rules;
+        }
+
+        // With listed fields, an allow rule's patterns reach only those fields, as its literal fields do: "**" can't
+        // grant a field the registry doesn't list. A cannot rule's patterns still reach every field.
+        SubjectDefinition? listing = field is not null && subjectType is not null
+            && _subjects.TryGet(subjectType, out SubjectDefinition? definition) && definition!.ListsFields ? definition : null;
+        return rules.Where(r => r.MatchesField(field) && (listing is null || r.Inverted || !r.HasFieldPatterns || listing.HasField(field!))).ToList();
     }
 
     /// <summary>Every action rules mention for a subject type, including those on the any-subject type.</summary>
@@ -169,7 +178,9 @@ public sealed class Ability
     {
         string subjectType = DetectSubjectType(subject);
         object? instance = InstanceOf(subject);
-        fieldsFrom ??= rule => rule.Fields ?? DefaultFields(subjectType);
+        fieldsFrom ??= rule => rule.Fields is null ? DefaultFields(subjectType)
+            : !rule.Inverted && rule.HasFieldPatterns && ListedFields(subjectType) is { } listed ? listed.Where(rule.MatchesField)
+            : rule.Fields;
         IReadOnlyList<Rule> rules = PossibleRulesFor(action, subjectType);
         List<string> permitted = [];
 
@@ -466,6 +477,10 @@ public sealed class Ability
     private static TResult? Combine<TResult>(IReadOnlyList<Rule> rules, Func<Rule, TResult> convert,
         Func<IReadOnlyList<TResult>, TResult> and, Func<IReadOnlyList<TResult>, TResult> or, Func<TResult> empty) where TResult : class =>
         RulesToCondition(rules, convert, and, or, empty);
+
+    /// <summary>The fields rules on <paramref name="subjectType"/> may name, or null when any field is allowed.</summary>
+    private IReadOnlyList<string>? ListedFields(string subjectType) =>
+        _subjects.TryGet(subjectType, out SubjectDefinition? definition) && definition!.ListsFields ? definition.Fields : null;
 
     private IReadOnlyList<string> DefaultFields(string subjectType) =>
         _subjects.TryGet(subjectType, out SubjectDefinition? definition) && definition!.Fields.Count > 0
