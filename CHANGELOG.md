@@ -54,6 +54,17 @@ says how.
   inverted flag other than the number 1 (`true`, `"1"`, `2`) turned a `cannot` rule into an allow rule, and fields or
   subjects that weren't text became every field or every subject. These now throw `CaslConfigurationException`.
   Everything CASL's `packRules` writes is still read, and an inverted flag of `true` or `false` is accepted.
+- `Filter` and `AccessibleBy` now refuse an index into a collection of objects, such as `comments.0.authorId`, with
+  `CaslConfigurationException`. EF Core translates the index to `LIMIT 1 OFFSET 0` without an `ORDER BY`, so the
+  database picked whichever related row it returned first. After an ordinary update of another comment, the row
+  filter could return an item that `Can` refused, or skip a `cannot` rule. `Can` still reads the index from the list
+  in memory, and an index into a collection of values (`labels.0`) works in SQL as before.
+- Time values in conditions no longer depend on the server's time zone. Text with an offset, which is what a
+  `DateTimeOffset` variable such as `${now}` becomes, was converted to the server's local time for a `DateTime`
+  member, so `{ "dueAt": { "$gt": "${now}" } }` let expired rows through for hours on a server west of UTC and hid
+  valid ones east of it (and Npgsql refused the value for `timestamptz` columns). It is now converted to UTC. Text
+  without an offset is used as written for `DateTime` members and read as UTC, not local time, for `DateTimeOffset`
+  members.
 
 **Added**
 - The `release` workflow's NuGet and npm jobs run in a `release` environment, and the workflow stops when the tag

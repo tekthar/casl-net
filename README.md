@@ -99,7 +99,7 @@ MongoDB query syntax, the same subset CASL supports, plus logical operators:
 | Text | `$regex`, with `$options` (`i`, `m`, `s`, `x`) |
 | Logical | `$and`, `$or`, `$nor`, `$not` |
 | Arrays | `{ labels: "bug" }` means "labels contains bug"; also `$all`, `$size`, `$elemMatch`, and dot notation through collections (`"comments.authorId": "u2"` means "any comment by u2") |
-| Paths | Dot notation through navigations (`"project.orgUnitId"`) and array indexes (`"authors.0"`) |
+| Paths | Dot notation through navigations (`"project.orgUnitId"`) and array indexes (`"labels.0"`; in memory only for collections of objects) |
 | Placeholders | `"${user.id}"`, `"${grant.projectIds}"`; a whole-string placeholder can be an array or a number |
 
 How they behave:

@@ -406,7 +406,7 @@ public sealed class Ability
     {
         SubjectDefinition definition = _subjects.Get(type);
         ParameterExpression x = Expression.Parameter(type, "x");
-        ExpressionBuilder builder = new(definition, nullSafe: false);
+        ExpressionBuilder builder = new(definition, nullSafe: false, forSql: true);
         IReadOnlyList<Rule> rules = RulesFor(action, definition.Name);
 
         Expression? body = _options.Semantics == RuleSemantics.Casl

@@ -92,6 +92,10 @@ A path that ends on a collection checks its elements; a path that passes through
 `$elemMatch` needs every condition to hold for the same element; separate paths through a collection may each match a
 different element, as in MongoDB. `$size` takes a non-negative whole number.
 
+An index works everywhere on a collection of values (`labels.0`). On a collection of objects (`authors.0`,
+`comments.0.authorId`) it works in memory, but `Filter` and `AccessibleBy` throw `CaslConfigurationException`:
+related rows have no order in SQL, so the database can't tell which one is first.
+
 ## Nulls and missing objects
 
 A related object that is missing reads as null, the way a LEFT JOIN does: `{ "project.archived": false }` doesn't match
@@ -110,6 +114,10 @@ fails the build:
 | enums | the member's name, in any letter case (`"open"`), or its number |
 | `Guid` | its text form |
 | `DateTime`, `DateTimeOffset`, `DateOnly` | ISO 8601 text (`"2026-11-01T00:00:00Z"`, `"2026-11-01"`) |
+
+Time values mean the same instant on every server. Text with an offset (`"…+02:00"`, or a `DateTimeOffset` variable,
+which becomes such text) is converted to UTC, never to the server's local time. For a `DateTime` member, text without
+an offset is used as written; for a `DateTimeOffset` member, it is read as UTC.
 
 Members of other types can't be used in conditions.
 

@@ -15,8 +15,11 @@ namespace Casl;
 ///   sits in a <see cref="ValueBox{T}"/> so EF sends it as a parameter: one cached SQL plan serves all users.
 /// - In-memory mode adds null checks along navigations so a missing related object reads as null,
 ///   the way a LEFT JOIN does in SQL.
+///
+/// <paramref name="forSql"/> marks the expression for a database (<see cref="Ability.Filter{T}"/>), which refuses an
+/// index into a collection of objects: related rows have no order in SQL.
 /// </summary>
-internal sealed class ExpressionBuilder(SubjectDefinition subject, bool nullSafe, TimeSpan? regexTimeout = null)
+internal sealed class ExpressionBuilder(SubjectDefinition subject, bool nullSafe, TimeSpan? regexTimeout = null, bool forSql = false)
 {
     private static readonly MethodInfo EnumerableAny = typeof(Enumerable).GetMethods()
         .Single(m => m.Name == nameof(Enumerable.Any) && m.GetParameters().Length == 2);
@@ -294,6 +297,15 @@ internal sealed class ExpressionBuilder(SubjectDefinition subject, bool nullSafe
                 nullGuard = nullGuard is null ? notNull : Expression.AndAlso(nullGuard, notNull);
             }
 
+            if (forSql && segments[i].Index is not null && !IsSimpleValue(segments[i].Type))
+            {
+                // EF Core translates the index to LIMIT/OFFSET without an ORDER BY, so "first" would be whichever row the
+                // database happens to return first, which changes as rows are updated, unlike the list order in memory.
+                throw new CaslConfigurationException(
+                    $"'{subject.Name}.{path}' indexes a collection of {segments[i].Type.Name}, and related rows have no order in SQL, so Filter and AccessibleBy can't tell which one is first. "
+                    + "Use a path through the collection ('comments.authorId', any element) or $elemMatch, or check it in memory with Can.");
+            }
+
             current = segments[i].Index is { } index
                 ? Expression.Call(EnumerableElementAtOrDefault.MakeGenericMethod(segments[i].Type), AsEnumerable(current, segments[i].Type), Expression.Constant(index))
                 : Expression.MakeMemberAccess(current, segments[i].Member!);
@@ -330,6 +342,15 @@ internal sealed class ExpressionBuilder(SubjectDefinition subject, bool nullSafe
 
     private static string Join(string prefix, string path) =>
         prefix.Length == 0 ? path : path.Length == 0 ? prefix : prefix + "." + path;
+
+    /// <summary>Whether <paramref name="type"/> is a single value (text, a number, a date...), not an object with members.</summary>
+    private static bool IsSimpleValue(Type type)
+    {
+        Type core = Nullable.GetUnderlyingType(type) ?? type;
+        return core.IsPrimitive || core.IsEnum || core == typeof(string) || core == typeof(decimal) || core == typeof(Guid)
+            || core == typeof(DateTime) || core == typeof(DateTimeOffset) || core == typeof(DateOnly) || core == typeof(TimeOnly)
+            || core == typeof(TimeSpan);
+    }
 
     internal static Type? ElementTypeOf(Type type)
     {
@@ -387,14 +408,32 @@ internal static class ValueConverter
                 return v.GetValue<bool>();
             }
 
+            // A time value must mean the same instant on every server. Text with an offset ("+02:00", or what a
+            // DateTimeOffset variable becomes) is kept in UTC: read as the server's local time, it would move a rule
+            // such as { dueAt: { $gt: "${now}" } } by the server's UTC offset. Text without an offset is used as written.
             if (type == typeof(DateTime))
             {
-                return v.TryGetValue(out DateTime dt) ? dt : DateTime.Parse(v.GetValue<string>(), CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind);
+                if (v.TryGetValue(out string? text))
+                {
+                    DateTime parsed = DateTime.Parse(text, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind);
+                    return parsed.Kind == DateTimeKind.Local ? DateTimeOffset.Parse(text, CultureInfo.InvariantCulture).UtcDateTime : parsed;
+                }
+
+                if (v.TryGetValue(out DateTimeOffset instant))
+                {
+                    return instant.UtcDateTime;
+                }
+
+                DateTime dt = v.GetValue<DateTime>();
+                return dt.Kind == DateTimeKind.Local ? dt.ToUniversalTime() : dt;
             }
 
             if (type == typeof(DateTimeOffset))
             {
-                return v.TryGetValue(out DateTimeOffset dto) ? dto : DateTimeOffset.Parse(v.GetValue<string>(), CultureInfo.InvariantCulture);
+                // Without an offset, the text is UTC, not the server's local time.
+                return v.TryGetValue(out string? text)
+                    ? DateTimeOffset.Parse(text, CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal)
+                    : v.GetValue<DateTimeOffset>();
             }
 
             if (type == typeof(DateOnly))
