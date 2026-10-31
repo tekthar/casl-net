@@ -4,7 +4,7 @@ All notable changes to CASL .NET (`Casl.Net` on NuGet) and its browser companion
 [Semantic Versioning](https://semver.org); before 1.0, a minor version (0.2, 0.3) may change the API, and this file
 says how.
 
-## Unreleased
+## 0.2.0 (2026-10-31)
 
 **Security**
 - A placeholder whose variable is null now fails the build, as a missing one already did. Before, a null variable was
