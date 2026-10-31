@@ -5,174 +5,296 @@
 [![CI](https://github.com/tekthar/casl-net/actions/workflows/ci.yml/badge.svg)](https://github.com/tekthar/casl-net/actions/workflows/ci.yml)
 [![License: Apache-2.0](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](https://github.com/tekthar/casl-net/blob/main/LICENSE)
 
-> An independent, community-built .NET implementation of [CASL](https://casl.js.org)'s rule format and semantics. Not affiliated with or endorsed by CASL or its author.
+**Permissions you can read out loud.**
 
-**CASL-compatible authorization for .NET.** Write permission rules once, in the [CASL](https://casl.js.org) format, and use them three ways:
+CASL .NET (say it like *castle dot net*) is a small authorization library for .NET that answers one question: **may this
+user do this to that?** You write rules that read like your business requirements. Then you ask them in memory, in your
+database query, or in the browser, and you get the same answer in all three.
 
-- **In memory:** `ability.Can("update", workItem)`
-- **In the database:** `db.WorkItems.AccessibleBy(ability, "read")`. Rules become a LINQ expression that EF Core translates to SQL, with rule values sent as SQL parameters.
-- **In the browser:** send `ability.ToCaslRules()` to the frontend and check them with the real `@casl/ability`.
+It handles both simple role checks and full attribute-based access control (ABAC), without a policy language to
+learn or a server to run.
 
-All three give the same answers. That isn't a promise; three sets of tests check it on every build:
-- **CASL's own test suite**, ported to C#: 172 of CASL's 187 runtime tests; the other 15 test JavaScript-only behaviour ([details](https://github.com/tekthar/casl-net/blob/main/docs/casl-spec-port.md)).
-- **Database vs memory:** 400 random rule sets × 2 actions × 120 entities on a real EF Core database, under both rule semantics. The SQL filter and the in-memory check return the same rows every time.
-- **CASL compatibility:** 24,000 decisions on 150 random rule sets, made by CASL .NET and by `@casl/ability` 7, all identical.
+```csharp
+var ability = new AbilityBuilder()
+    .Can("read", "BlogPost")
+    .Can("manage", "BlogPost", new { authorId = user.Id })
+    .Cannot("delete", "BlogPost", new { published = true }).Because("Published posts stay published")
+    .Build();
 
-It has no dependencies beyond .NET itself, so you can use it in any .NET 8 or later application, with or without EF Core. It was first built for Msar, an open-source work management platform, and is maintained by [Tekthar](https://github.com/tekthar) as a standalone project.
+ability.Can("update", post);                     // in memory
+db.BlogPosts.AccessibleBy(ability, "update");    // in SQL, through EF Core
+ability.ToCaslRules();                           // in the browser, with @casl/ability
+```
 
-## Quick start
+> An independent, community-built .NET implementation of [CASL](https://casl.js.org)'s rule format and semantics. Not
+> affiliated with or endorsed by CASL or its author.
 
-Everything lives in the `Casl` namespace: `using Casl;`.
+## Why you'll like it
+
+- **Readable**: a rule is an action, a subject, and optionally some conditions and fields. Anyone on the team can
+  read it, including the product manager.
+- **Start small, grow later**: begin with `Can("login")`, add roles, and add attribute conditions only once you need
+  them. You don't have to rewrite anything as you go.
+- **Write once, check anywhere**: the same rules check one object in memory, filter whole tables in SQL, and hide
+  buttons in the browser.
+- **Rules are data**: rules are plain JSON in CASL's format, so you can keep them in a table, let admins edit them,
+  and send them to the frontend.
+- **Safe by default**: a rule that can't be enforced exactly fails when the ability is built. It is never skipped.
+  You choose which fields a rule may filter on, so nobody can write a rule against `PasswordHash`.
+- **No dependencies**: works with .NET 8 and later, with or without EF Core.
+- **Tested against CASL itself**: CASL's own test suite, ported to C#, runs on every build. So does a comparison with
+  the real `@casl/ability`. [More below](#how-do-we-know-it-works).
+
+If you've used CASL in JavaScript, you already know how this works.
+
+## Install
 
 ```bash
 dotnet add package Casl.Net
 ```
 
-For the browser: `npm install casl-net @casl/ability`.
+For the browser:
 
-If you know CASL, it works the way you expect:
+```bash
+npm install casl-net @casl/ability
+```
+
+Everything lives in one namespace: `using Casl;`.
+
+## Crash course
+
+An ability is built from **rules**, and every rule has up to four parts:
+
+1. **Action**: what the user does. Any verb your app needs: `read`, `update`, `publish`, `refund`.
+   `manage` means every action.
+2. **Subject**: what they do it to: `BlogPost`, `Invoice`, `User`. `all` means every subject.
+3. **Conditions** *(optional)*: which instances the rule applies to, such as "posts they wrote". Conditions use
+   MongoDB-style queries like `{ authorId: 42 }` or `{ status: { $in: [...] } }`.
+4. **Fields** *(optional)*: which properties the rule covers, such as "may edit `title`, but not `published`".
+
+Rules are either `Can` or `Cannot`. Let's build some.
+
+### 1. Define what users can do
+
+Say a blog has these requirements:
+
+- anyone can read posts;
+- authors can do anything with their own posts;
+- nobody can delete a published post.
+
+Here they are as rules:
 
 ```csharp
-var ability = new AbilityBuilder()
-    .Can("read", "Post")
-    .Can("update", "Post", new { authorId = user.Id })
-    .Cannot("delete", "Post", new { published = true }).Because("Published posts can't be deleted")
-    .Build();
+using Casl;
 
-ability.Can("update", post);          // the subject type of a Post object is "Post"
-ability.Can("delete", "Post");        // "on at least some posts?"
+Ability DefineAbilityFor(User user) => new AbilityBuilder()
+    .Can("read", "BlogPost")
+    .Can("manage", "BlogPost", new { authorId = user.Id })
+    .Cannot("delete", "BlogPost", new { published = true }).Because("Published posts stay published")
+    .Build();
 ```
 
-When rules come from users (an admin screen, a database), use a strict registry, so rules can only filter on
-members you list:
+Each requirement became one line. Conditions use your property names in camelCase: `authorId` reads `AuthorId`.
+
+### 2. Check them
 
 ```csharp
-// 1. Say which types are subjects, and which members rules may filter on.
-var subjects = new SubjectRegistry()
-    .Add<WorkItem>("WorkItem", s => s
-        .ConditionFields("projectId", "assigneeId", "status", "priority", "labels",
-                         "project.orgUnitId", "comments.authorId")
-        .Fields("summary", "status", "assigneeId", "priority"));
+var ability = DefineAbilityFor(currentUser);
 
-// 2. Build one user's ability from rules: from code, from your database, from role grants.
-var ability = new AbilityBuilder(subjects)
-    .WithVariables(new { user = new { id = currentUserId } })
-    .Can("read", "WorkItem", new { projectId = new Dictionary<string, object> { ["$in"] = new[] { 1, 2 } } })
-    .AddRange(RawRule.ParseMany(rulesJsonFromDatabase), variables: new { grant = new { projectIds = new[] { 7 } } })
-    .Cannot("update", "WorkItem", new { status = "Done" }, reason: "Done items are frozen", "status")
-    .Build();
+ability.Can("read", "BlogPost");     // true: can they read at least some posts?
+ability.Can("update", myDraft);      // true: they wrote it
+ability.Can("update", someoneElses); // false
+ability.Can("delete", myDraft);      // true
+ability.Can("delete", myLivePost);   // false: it's published
 
-// 3. Use it.
-ability.Can("update", item);                       // one object
-ability.Can("update", item, "status");             // one field
-ability.PermittedFields("update", item);           // ["summary", "assigneeId", "priority"]
-ability.EnsureCan("update", item, "status");       // throws ForbiddenException("Done items are frozen")
-var visible = await db.WorkItems.AccessibleBy(ability, "read").ToListAsync();   // filtered in SQL
-var forBrowser = ability.ToCaslRules();            // JSON for @casl/ability
+ability.EnsureCan("delete", myLivePost);
+// throws ForbiddenException: "Published posts stay published"
 ```
 
-Rules are plain JSON in CASL's format, so they can live in a database table and be edited by admins:
+An object's subject type is its class name, so a `BlogPost` instance is checked against `"BlogPost"` rules. You can also
+use the type itself: `.Can<BlogPost>("read")`.
 
-```json
-{ "action": "update", "subject": "WorkItem",
-  "conditions": { "projectId": { "$in": "${grant.projectIds}" }, "assigneeId": "${user.id}" },
-  "fields": ["summary", "status"] }
+### 3. Filter the database
+
+Checking one object at a time doesn't work for a list page. `AccessibleBy` turns the same rules into a LINQ filter,
+and EF Core translates it to SQL:
+
+```csharp
+var deletable = await db.BlogPosts
+    .AccessibleBy(ability, "delete")
+    .ToListAsync();
 ```
 
-In the browser:
+```sql
+SELECT ... FROM "BlogPosts" AS "b"
+WHERE "b"."AuthorId" = @Value AND "b"."Published" <> @Value1
+```
+
+The query only returns rows the user may delete. Rule values are sent as SQL parameters, so every user shares one
+cached query plan. It's an ordinary `IQueryable`, so you can chain `Where`, `OrderBy` and paging before or after it.
+
+### 4. Share rules with the browser
+
+Send the rules to the frontend, and the UI hides exactly what the server would refuse:
+
+```csharp
+app.MapGet("/api/me/rules", () => DefineAbilityFor(currentUser).ToCaslRules());
+```
 
 ```js
 import { createAbility } from 'casl-net';
 import { subject } from '@casl/ability';
 
-const ability = createAbility(rulesFromServer);
-ability.can('update', subject('WorkItem', item));
+const ability = createAbility(await fetch('/api/me/rules').then(r => r.json()));
+
+ability.can('delete', subject('BlogPost', post));   // same answer as the server
 ```
 
-## Conditions
+This is the real [`@casl/ability`](https://casl.js.org), so CASL's React, Vue and Angular integrations work with it
+too.
 
-MongoDB query syntax, the same subset CASL supports, plus logical operators:
+### 5. Let admins write the rules
 
-| Kind | Operators |
-|---|---|
-| Comparison | `$eq` (or a plain value), `$ne`, `$gt`, `$gte`, `$lt`, `$lte`, `$in`, `$nin`, `$exists` |
-| Text | `$regex`, with `$options` (`i`, `m`, `s`, `x`) |
-| Logical | `$and`, `$or`, `$nor`, `$not` |
-| Arrays | `{ labels: "bug" }` means "labels contains bug"; also `$all`, `$size`, `$elemMatch`, and dot notation through collections (`"comments.authorId": "u2"` means "any comment by u2") |
-| Paths | Dot notation through navigations (`"project.orgUnitId"`) and array indexes (`"authors.0"`) |
-| Placeholders | `"${user.id}"`, `"${grant.projectIds}"`; a whole-string placeholder can be an array or a number |
+When rules come from a database or an admin screen, register your subjects first. A strict registry only accepts
+rules on the members you list:
 
-How they behave:
-- **Safe by default with a strict registry.** Only member paths registered with `ConditionFields` are accepted, so rule authors can't filter on `PasswordHash`. Unknown operators, unknown fields, unknown placeholders and values of the wrong type fail when the ability is built. They are never skipped, because skipping a "cannot" rule would widen access.
-- **Values become SQL parameters**, so EF Core caches one query plan for every user, not one per user.
-- **Missing related objects read as null**, the way a LEFT JOIN does: `{ "project.archived": false }` doesn't match an item with no project.
-- **Ordering operators aren't allowed on text, `Guid`, `bool` or enums**, because databases and .NET order text differently.
+```csharp
+var subjects = new SubjectRegistry()
+    .Add<BlogPost>("BlogPost", s => s
+        .ConditionFields("authorId", "published")   // what rules may filter on
+        .Fields("title", "body"));                  // what field-level rules may name
+```
 
-## Rule semantics
+Rules are JSON, with placeholders that are filled in for each user:
 
-- **CASL's by default: the last matching rule wins.** `Can("read", "Post")` followed by `Cannot("read", "Post", new { secret = true })` hides secret posts; in the other order, the later `Can` lets them through.
-- **Or deny-overrides**, with `new AbilityOptions { Semantics = RuleSemantics.DenyOverrides }`: access is granted when an allow rule matches and no "cannot" rule matches, whatever order the rules come in. Choose this when rules are combined from several roles or grants, where order means nothing. `ToCaslRules()` then puts "cannot" rules last, so `@casl/ability` reaches the same answers.
-- **`manage` and `all`** mean every action and every subject, as in CASL. Both can be renamed (`AnyAction`, `AnySubjectType`).
-- **Field-level rules follow CASL.** A check without a field ignores "cannot" rules limited to fields and counts allow rules limited to fields. A field-limited "cannot" doesn't hide rows from `AccessibleBy`; it only restricts those fields.
-- **`Can(action, "Subject")` without an instance** answers "could this user do it to some instance?", for menus and buttons.
-- **Validate rules before saving them:** `AbilityBuilder.Validate(rule, subjects)` checks paths, operators and fields without needing placeholder values.
-- **Abilities are immutable.** Build a new one when rules change. One ability can be shared across threads, and it caches its compiled checks and SQL filters.
+```json
+[
+  { "action": "update", "subject": "BlogPost",
+    "conditions": { "authorId": "${user.id}" },
+    "fields": ["title", "body"] }
+]
+```
 
-## Everything else CASL has
+```csharp
+var ability = new AbilityBuilder(subjects)
+    .WithVariables(new { user = new { id = currentUser.Id } })
+    .AddRange(RawRule.ParseMany(rulesFromDatabase))
+    .Build();
+
+ability.Can("update", post, "title");          // true for their own posts
+ability.PermittedFields("update", post);       // ["title", "body"]
+```
+
+A rule that filters on an unregistered member is rejected with a clear error:
+
+```text
+CaslConfigurationException: Conditions on 'BlogPost.passwordHash' are not allowed.
+Register the path with ConditionFields("passwordHash").
+```
+
+To catch mistakes before a rule is saved, check it first with `AbilityBuilder.Validate(rule, subjects)`.
+
+## Conditions at a glance
+
+Conditions use the same MongoDB subset as CASL:
 
 | | |
 |---|---|
-| Action aliases | `new AbilityOptions { Aliases = ActionAliases.Create(new Dictionary<string, string[]> { ["modify"] = ["update", "delete"] }) }` |
-| Field patterns | `.OnFields("author.*")`, `"author.**"`, `"*.name"`, `"street*"` |
-| Claim rules | `Can("login")`, checked with `ability.Can("login")` |
-| Class subjects | `Can<Post>("read")`; `ability.Can("read", typeof(Post))` |
-| Tagged objects | `ability.Can("read", Subject.Of("Article", dto))` |
-| Custom subject detection | `AbilityOptions.DetectSubjectType` |
-| Error messages | `.Because("…")`, `EnsureCan(…, message: …)`, `AbilityOptions.ForbiddenMessage`; `ForbiddenException` carries `Action`, `Subject`, `SubjectType`, `Field`, `Reason` |
-| Rule lookup | `RulesFor`, `PossibleRulesFor`, `RelevantRuleFor`, `ActionsFor` |
-| Fields and defaults | `PermittedFields` (`permittedFieldsOf`), `DefaultValues` (`rulesToFields`) |
-| Queries | `Filter<T>` and `AccessibleBy` for EF Core; `ToMongoQuery` for document stores; `Ability.RulesToCondition` for anything else |
-| Compact transport | `PackedRules.Pack` / `Unpack`, compatible with CASL's `packRules` / `unpackRules` |
+| Compare | `$eq` (or a plain value), `$ne`, `$gt`, `$gte`, `$lt`, `$lte`, `$in`, `$nin`, `$exists` |
+| Combine | `$and`, `$or`, `$nor`, `$not` |
+| Text | `$regex` with `$options` |
+| Arrays | `{ labels: "bug" }` means "contains", plus `$all`, `$size`, `$elemMatch` |
+| Paths | `"project.orgUnitId"`, `"comments.authorId"` (any comment), `"authors.0"` |
+| Placeholders | `"${user.id}"`, `"${grant.projectIds}"` |
 
-[docs/casl-spec-port.md](https://github.com/tekthar/casl-net/blob/main/docs/casl-spec-port.md) maps each CASL function to its .NET name.
+The [conditions guide](https://github.com/tekthar/casl-net/blob/main/docs/conditions.md) covers every operator, and
+what is refused and why.
+
+## Everything else CASL has
+
+CASL .NET follows CASL closely, so its other features are here too: "last rule wins" semantics (or **deny-overrides**,
+when rules come from several roles), action aliases, field patterns like `author.*`, claim rules, custom subject
+detection, rule lookup (`RulesFor`, `RelevantRuleFor`), `ToMongoQuery`, and packed rules for a smaller payload.
+
+[Coming from CASL](https://github.com/tekthar/casl-net/blob/main/docs/casl-spec-port.md) maps each CASL function to its
+.NET name.
+
+## How do we know it works?
+
+Authorization is not a good place for surprises, so three test suites check the in-memory, SQL and browser answers
+against each other on every build:
+
+- **CASL's own test suite**, ported to C#: 172 of CASL's 187 runtime tests. The other 15 test JavaScript-only
+  behaviour ([details](https://github.com/tekthar/casl-net/blob/main/docs/casl-spec-port.md)).
+- **Database vs memory**: 400 random rule sets × 2 actions × 120 entities on a real EF Core database, under both rule
+  semantics. The SQL filter and the in-memory check return the same rows every time.
+- **CASL compatibility**: 24,000 decisions on 150 random rule sets, made by CASL .NET and by `@casl/ability` 7. All of
+  them are identical.
+
+## Packages
+
+| Package | | What it is |
+|---|---|---|
+| [`Casl.Net`](https://www.nuget.org/packages/Casl.Net) | [![NuGet](https://img.shields.io/nuget/v/Casl.Net.svg)](https://www.nuget.org/packages/Casl.Net) | The library: abilities, rules, EF Core filtering. .NET 8+, no dependencies |
+| [`casl-net`](https://www.npmjs.com/package/casl-net) | [![npm](https://img.shields.io/npm/v/casl-net.svg)](https://www.npmjs.com/package/casl-net) | The browser companion: configures `@casl/ability` to read CASL .NET rules |
 
 ## Documentation
 
 | Guide | What it covers |
 |---|---|
-| [Getting started](https://github.com/tekthar/casl-net/blob/main/docs/getting-started.md) | Install, a first ability, rules from a database, one ability per request in ASP.NET Core |
-| [Rules](https://github.com/tekthar/casl-net/blob/main/docs/rules.md) | The rule format, actions and subjects, placeholders, how rules combine, validating rules before saving them |
-| [Conditions](https://github.com/tekthar/casl-net/blob/main/docs/conditions.md) | Every operator, with examples, and what is refused and why |
-| [Subjects and fields](https://github.com/tekthar/casl-net/blob/main/docs/subjects-and-fields.md) | Strict and open registries, condition paths, field-level rules, field patterns and families, `FieldMatch.Named` |
-| [EF Core and SQL](https://github.com/tekthar/casl-net/blob/main/docs/ef-core.md) | `AccessibleBy` and `Filter<T>`, what the SQL looks like, navigations and collections, nulls, other stores |
-| [The browser](https://github.com/tekthar/casl-net/blob/main/docs/browser.md) | Sending rules to `@casl/ability` with the `casl-net` npm package, packed rules, checking fields in the UI |
+| [Getting started](https://github.com/tekthar/casl-net/blob/main/docs/getting-started.md) | A first ability, rules from a database, one ability per request in ASP.NET Core |
+| [Rules](https://github.com/tekthar/casl-net/blob/main/docs/rules.md) | The rule format, placeholders, how rules combine, validating rules before saving them |
+| [Conditions](https://github.com/tekthar/casl-net/blob/main/docs/conditions.md) | Every operator, with examples |
+| [Subjects and fields](https://github.com/tekthar/casl-net/blob/main/docs/subjects-and-fields.md) | Strict and open registries, condition paths, field-level rules and patterns |
+| [EF Core and SQL](https://github.com/tekthar/casl-net/blob/main/docs/ef-core.md) | `AccessibleBy` and `Filter<T>`, the generated SQL, navigations, nulls, other stores |
+| [The browser](https://github.com/tekthar/casl-net/blob/main/docs/browser.md) | Sending rules to `@casl/ability`, packed rules, field checks in the UI |
 | [Coming from CASL](https://github.com/tekthar/casl-net/blob/main/docs/casl-spec-port.md) | Each CASL function's .NET name, and which of CASL's tests are ported |
 
-The [changelog](https://github.com/tekthar/casl-net/blob/main/CHANGELOG.md) lists what each release changed. The API reference is in the package's XML documentation, so your editor shows it.
+The API reference ships as XML documentation, so your editor shows it as you type. The
+[changelog](https://github.com/tekthar/casl-net/blob/main/CHANGELOG.md) lists what each release changed.
 
-## Repository
+## Status and roadmap
+
+This is **0.1.0**, the first release. Every build checks its decisions against CASL and a real database, but the API
+may still change before 1.0. Minor versions may include breaking changes, and the
+[changelog](https://github.com/tekthar/casl-net/blob/main/CHANGELOG.md) will describe them. Coming next:
+
+- custom operators, for example `$under` for org-unit subtrees
+- ordering operators on enums
+- an ASP.NET Core package for per-request abilities and authorization policies
+
+## Have a question? Want to help?
+
+Questions, ideas and bug reports are welcome as [issues](https://github.com/tekthar/casl-net/issues). If you'd like to
+contribute code or docs, read the [contributing guide](https://github.com/tekthar/casl-net/blob/main/CONTRIBUTING.md).
+Please report security problems through [private reporting](https://github.com/tekthar/casl-net/blob/main/SECURITY.md),
+not in public issues.
 
 ```
 src/Casl.Net/               the library (package Casl.Net, namespace Casl; net8.0, net10.0)
 packages/casl-net/          casl-net on npm, the browser companion
-tests/Casl.Net.Tests/       unit tests, CASL's ported specs (CaslSpec/) and the database-vs-memory test (EF Core + SQLite)
+tests/Casl.Net.Tests/       unit tests, CASL's ported specs (CaslSpec/) and the database-vs-memory test
 tests/casl-compat/          the CASL compatibility test (Node, real @casl/ability)
 ```
 
+To run the tests:
+
 ```bash
 dotnet test
+```
+
+```bash
 cd tests/casl-compat && npm install && npm test   # after dotnet test, which writes the fixture
 ```
 
-## Status
-
-0.1.0, the first release. Every build checks its decisions against CASL and against a real database, but the API may still change before 1.0: minor versions (0.2, 0.3) may break it, and the [changelog](https://github.com/tekthar/casl-net/blob/main/CHANGELOG.md) will say how. Planned next:
-- custom operators, for example `$under` for org-unit subtrees through a closure table
-- ordering operators on enums
-- an ASP.NET Core package for per-request abilities and authorization policies
-
-Questions and ideas are welcome as [issues](https://github.com/tekthar/casl-net/issues); security problems go through [private reporting](https://github.com/tekthar/casl-net/blob/main/SECURITY.md).
+CASL .NET was first built for Msar, an open-source work management platform. [Tekthar](https://github.com/tekthar)
+maintains it as a standalone project.
 
 ## Credits and licence
 
-Apache License 2.0. CASL .NET is an independent implementation of CASL's rule format and semantics. CASL ([stalniy/casl](https://github.com/stalniy/casl)) is MIT-licensed, and its design is what this library follows. A few files are translations of CASL code (alias resolution, field patterns, rule packing, `rulesToCondition`), and the CASL tests are ported from CASL's specs; they are listed, with CASL's licence, in [THIRD-PARTY-NOTICES.md](https://github.com/tekthar/casl-net/blob/main/THIRD-PARTY-NOTICES.md).
+Apache License 2.0.
+
+CASL .NET is an independent implementation of the rule format and semantics of CASL
+([stalniy/casl](https://github.com/stalniy/casl), MIT, by Sergii Stotskyi). The design is CASL's. Thank you. A few
+files are translations of CASL code, and the CASL tests are ported from CASL's specs. These are listed, with CASL's
+licence, in [THIRD-PARTY-NOTICES.md](https://github.com/tekthar/casl-net/blob/main/THIRD-PARTY-NOTICES.md).
