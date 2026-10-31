@@ -298,3 +298,6 @@ CASL .NET is an independent implementation of the rule format and semantics of C
 ([stalniy/casl](https://github.com/stalniy/casl), MIT, by Sergii Stotskyi). The design is CASL's. Thank you. A few
 files are translations of CASL code, and the CASL tests are ported from CASL's specs. These are listed, with CASL's
 licence, in [THIRD-PARTY-NOTICES.md](https://github.com/tekthar/casl-net/blob/main/THIRD-PARTY-NOTICES.md).
+
+**Sister project:** [abp-mcp](https://github.com/tekthar/abp-mcp), which turns your ABP Framework app into an MCP server
+that AI agents can call with the permissions your users already have.
