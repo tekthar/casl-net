@@ -18,9 +18,9 @@ permissions:
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0 # main's history, for the check below
       - name: The tag is on main
@@ -29,12 +29,12 @@ jobs:
             echo "::error::$GITHUB_REF_NAME points to a commit that isn't on main. Release from main (CONTRIBUTING.md)."
             exit 1
           fi
-      - uses: actions/setup-dotnet@v4
+      - uses: actions/setup-dotnet@v6
         with:
           dotnet-version: |
             8.0.x
             10.0.x
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: 22
       - name: The tag matches the version
@@ -60,7 +60,7 @@ jobs:
       - name: Pack casl-net
         working-directory: packages/casl-net
         run: npm pack --pack-destination ../../artifacts
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: packages
           path: artifacts/*
@@ -68,16 +68,16 @@ jobs:
 
   nuget:
     needs: build
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     environment: release
     permissions:
       id-token: write # trusted publishing: GitHub's OIDC token is exchanged for a one-hour NuGet API key
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           name: packages
           path: artifacts
-      - uses: actions/setup-dotnet@v4
+      - uses: actions/setup-dotnet@v6
         with:
           dotnet-version: 10.0.x
       - name: NuGet login
@@ -94,13 +94,13 @@ jobs:
 
   npm:
     needs: build
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     environment: release
     permissions:
       id-token: write # trusted publishing, with provenance
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
         with:
           node-version: 24
           registry-url: https://registry.npmjs.org
@@ -117,12 +117,12 @@ jobs:
 
   github-release:
     needs: [nuget, npm]
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     permissions:
       contents: write
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/download-artifact@v4
+      - uses: actions/checkout@v7
+      - uses: actions/download-artifact@v8
         with:
           name: packages
           path: artifacts
