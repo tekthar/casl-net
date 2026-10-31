@@ -15,7 +15,7 @@ permissions:
 
 jobs:
   postgres:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     services:
       postgres:
         image: postgres:16
@@ -31,8 +31,8 @@ jobs:
     env:
       CASL_POSTGRES: Host=localhost;Port=5432;Username=postgres;Password=postgres
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-dotnet@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-dotnet@v6
         with:
           dotnet-version: 10.0.x
       - run: dotnet test tests/Casl.Net.PostgresTests -c Release --logger "console;verbosity=normal"
