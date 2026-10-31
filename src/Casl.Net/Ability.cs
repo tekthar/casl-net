@@ -413,8 +413,8 @@ public sealed class Ability
             ? Combine<Expression>(
                 rules,
                 rule => rule.Inverted ? Expression.Not(builder.Build(rule.Condition!, x)) : builder.Build(rule.Condition!, x),
-                all => all.Aggregate(Expression.AndAlso),
-                any => any.Aggregate(Expression.OrElse),
+                all => ExpressionBuilder.Combine(all, Expression.AndAlso),
+                any => ExpressionBuilder.Combine(any, Expression.OrElse),
                 () => Expression.Constant(true))
             : DenyOverridesFilter(rules, builder, x);
 
@@ -425,7 +425,7 @@ public sealed class Ability
     {
         Expression? Any(IEnumerable<Rule> subset)
         {
-            Expression? result = null;
+            List<Expression> parts = [];
             foreach (Rule rule in subset)
             {
                 if (rule.Condition is null)
@@ -433,11 +433,10 @@ public sealed class Ability
                     return Expression.Constant(true);
                 }
 
-                Expression part = builder.Build(rule.Condition, x);
-                result = result is null ? part : Expression.OrElse(result, part);
+                parts.Add(builder.Build(rule.Condition, x));
             }
 
-            return result;
+            return parts.Count == 0 ? null : ExpressionBuilder.Combine(parts, Expression.OrElse);
         }
 
         Expression? allow = Any(rules.Where(r => !r.Inverted));

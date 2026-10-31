@@ -94,5 +94,8 @@ JavaScript-specific. Tests marked "Not in CASL's spec" in the files are addition
   answers.
 - **Empty conditions.** `{}` counts as "no conditions". CASL keeps it as a condition that matches everything.
   Every check gives the same answer; only `RulesToCondition` output differs (`{}` rather than a branch per rule).
+- **Packed rules.** `PackedRules.Unpack` refuses an element of the wrong type, where `unpackRules` keeps it: for
+  example `1` as conditions, which three of CASL's pack tests use while testing the fields and reason elements. The
+  ported tests use `0` (no conditions) there.
 - **Validation.** Unknown operators, values of the wrong type and invalid regular expressions fail when the
   ability is built, not when it is first used.

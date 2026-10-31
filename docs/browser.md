@@ -64,7 +64,9 @@ import { unpackRules } from '@casl/ability/extra';
 const ability = createAbility(unpackRules(packed));
 ```
 
-`PackedRules.Unpack` reads packed rules in .NET too, including ones packed by CASL.
+`PackedRules.Unpack` reads packed rules in .NET too, including ones packed by CASL. Like `RawRule.Parse`, it fails
+closed: an element of the wrong type (conditions that aren't an object, an inverted flag other than 0, 1, `true` or
+`false`, fields or subjects that aren't text) throws `CaslConfigurationException` instead of being read as absent.
 
 ## The same answers
 

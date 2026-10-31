@@ -41,13 +41,34 @@ internal sealed class ExpressionBuilder(SubjectDefinition subject, bool nullSafe
 
     public Expression Build(Condition condition, Expression target, string pathPrefix = "") => condition switch
     {
-        AndCondition and => and.Items.Select(i => Build(i, target, pathPrefix)).Aggregate(Expression.AndAlso),
-        OrCondition or => or.Items.Select(i => Build(i, target, pathPrefix)).Aggregate(Expression.OrElse),
+        AndCondition and => Combine(and.Items.Select(i => Build(i, target, pathPrefix)).ToList(), Expression.AndAlso),
+        OrCondition or => Combine(or.Items.Select(i => Build(i, target, pathPrefix)).ToList(), Expression.OrElse),
         NotCondition not => Expression.Not(Build(not.Inner, target, pathPrefix)),
         FieldCondition field => BuildField(field, target, pathPrefix),
         ElemMatchCondition elem => BuildElemMatch(elem, target, pathPrefix),
         _ => throw new CaslConfigurationException($"Unsupported condition {condition.GetType().Name}."),
     };
+
+    /// <summary>
+    /// Joins conditions with <c>&amp;&amp;</c> or <c>||</c> as a balanced tree, keeping their order. A left-deep chain
+    /// would be as deep as the list is long, and EF Core walks expression trees recursively: a rule with tens of
+    /// thousands of alternatives would overflow the stack, which ends the whole process. Balanced, the depth is log2(n).
+    /// </summary>
+    internal static Expression Combine(IReadOnlyList<Expression> items, Func<Expression, Expression, Expression> join) =>
+        items.Count > 0
+            ? Combine(items, 0, items.Count, join)
+            : throw new CaslConfigurationException("A list of conditions can't be empty.");
+
+    private static Expression Combine(IReadOnlyList<Expression> items, int start, int count, Func<Expression, Expression, Expression> join)
+    {
+        if (count == 1)
+        {
+            return items[start];
+        }
+
+        int half = count / 2;
+        return join(Combine(items, start, half, join), Combine(items, start + half, count - half, join));
+    }
 
     private Expression BuildField(FieldCondition field, Expression target, string pathPrefix)
     {

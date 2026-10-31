@@ -20,7 +20,11 @@ public static class PackedRules
     /// <summary>Packs an ability's rules, with placeholders filled in.</summary>
     public static JsonArray Pack(IEnumerable<Rule> rules) => Pack(rules.Select(r => r.Origin));
 
-    /// <summary>Unpacks rules packed here or by CASL's <c>packRules</c>.</summary>
+    /// <summary>
+    /// Unpacks rules packed here or by CASL's <c>packRules</c>. Throws <see cref="CaslConfigurationException"/> for an
+    /// element of the wrong type, such as conditions that aren't an object or an inverted flag other than 0 or 1,
+    /// rather than reading it as absent, which would widen the rule.
+    /// </summary>
     public static IReadOnlyList<RawRule> Unpack(JsonArray packed) =>
         packed.Select(item => UnpackOne(item as JsonArray ?? throw new CaslConfigurationException("Each packed rule must be an array."))).ToList();
 
@@ -48,19 +52,54 @@ public static class PackedRules
         return new JsonArray(packed.ToArray());
     }
 
+    // Accepts exactly the shapes packRules writes and throws on anything else, as RawRule.Parse does: reading an
+    // unexpected value as "absent" would widen the rule (a deny read as an allow, conditions or fields dropped).
     private static RawRule UnpackOne(JsonArray packed)
     {
-        string Text(int i) => i < packed.Count && packed[i] is JsonValue v && v.TryGetValue(out string? s) ? s : string.Empty;
+        if (packed.Count is 0 or > 6)
+        {
+            throw new CaslConfigurationException("A packed rule has 1 to 6 elements: [actions, subjects, conditions, inverted, fields, reason].");
+        }
 
-        string subject = Text(1);
+        JsonNode? At(int i) => i < packed.Count ? packed[i] : null;
+
+        // packRules writes 0 for absent conditions and fields; a missing trailing element or null means the same.
+        static bool IsAbsent(JsonNode? node) => node is null || (node is JsonValue v && v.TryGetValue(out int n) && n == 0);
+
+        string? Text(int i, string name, bool zeroAllowed) => At(i) switch
+        {
+            null => null,
+            JsonValue v when v.TryGetValue(out string? s) => s,
+            JsonNode n when zeroAllowed && IsAbsent(n) => null,
+            _ => throw new CaslConfigurationException($"A packed rule's {name} must be a string."),
+        };
+
+        string action = Text(0, "actions", zeroAllowed: false) is { Length: > 0 } a
+            ? a
+            : throw new CaslConfigurationException("A packed rule needs its actions.");
+        string? subject = Text(1, "subjects", zeroAllowed: false);
+        string? fields = Text(4, "fields", zeroAllowed: true);
+        string? reason = Text(5, "reason", zeroAllowed: false);
+
         return new RawRule
         {
-            Action = Text(0).Split(','),
-            Subject = subject.Length == 0 ? null : subject.Split(','),
-            Conditions = packed.Count > 2 && packed[2] is JsonObject conditions ? (JsonObject)conditions.DeepClone() : null,
-            Inverted = packed.Count > 3 && packed[3] is JsonValue inverted && inverted.TryGetValue(out int flag) && flag == 1,
-            Fields = Text(4) is { Length: > 0 } fields ? fields.Split(',') : null,
-            Reason = Text(5) is { Length: > 0 } reason ? reason : null,
+            Action = action.Split(','),
+            Subject = string.IsNullOrEmpty(subject) ? null : subject.Split(','),
+            Conditions = At(2) switch
+            {
+                JsonObject conditions => (JsonObject)conditions.DeepClone(),
+                JsonNode n when !IsAbsent(n) => throw new CaslConfigurationException("A packed rule's conditions must be an object, or 0 for none."),
+                _ => null,
+            },
+            Inverted = At(3) switch
+            {
+                null => false,
+                JsonValue v when v.TryGetValue(out bool b) => b,
+                JsonValue v when v.TryGetValue(out int flag) && flag is 0 or 1 => flag == 1,
+                _ => throw new CaslConfigurationException("A packed rule's inverted flag must be 0 or 1."),
+            },
+            Fields = string.IsNullOrEmpty(fields) ? null : fields.Split(','),
+            Reason = string.IsNullOrEmpty(reason) ? null : reason,
         };
     }
 

@@ -44,6 +44,16 @@ says how.
   the registry leaves out, including through `FieldMatch.Named`. `PermittedFields` now lists the listed fields an
   allow pattern matches instead of the pattern itself. `cannot` patterns still reach every field, and open
   registries are unchanged.
+- A rule with a very wide `$or`, `$and` or `$all` (tens of thousands of entries), or an ability with that many rules,
+  no longer crashes the process when `Filter`/`AccessibleBy` is translated to SQL. Conditions were joined as a chain
+  as deep as the list was long, and EF Core walks expression trees recursively, so a single stored rule from a rule
+  author could overflow the stack, which can't be caught and ends the whole process. They are now joined as a
+  balanced tree. (SQLite still refuses statements nested more than 1000 deep, with an exception.)
+- `PackedRules.Unpack` now fails closed, as `RawRule.Parse` does. An element of the wrong type was read as absent,
+  always the widest way: conditions that weren't an object (a JSON string, an array) made the rule unconditional, an
+  inverted flag other than the number 1 (`true`, `"1"`, `2`) turned a `cannot` rule into an allow rule, and fields or
+  subjects that weren't text became every field or every subject. These now throw `CaslConfigurationException`.
+  Everything CASL's `packRules` writes is still read, and an inverted flag of `true` or `false` is accepted.
 
 **Added**
 - The `release` workflow's NuGet and npm jobs run in a `release` environment, and the workflow stops when the tag

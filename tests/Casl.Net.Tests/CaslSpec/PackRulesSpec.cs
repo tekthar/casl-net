@@ -153,21 +153,23 @@ public class PackRulesSpec
     public void Converts_inverted_to_boolean_even_if_it_is_not_specified() =>
         Assert.False(Unpack("""[["read","Post,Comment"]]""").Inverted);
 
+    // CASL's spec puts 1 in the conditions slot of the fields and reason tests below. Unpack refuses conditions that
+    // aren't an object, so they use 0 (no conditions), what packRules writes.
     [Fact]
     public void Puts_5th_element_under_fields_and_converts_it_to_an_array() =>
-        Assert.Equal(["title", "description"], Unpack("""[["read","Post,Comment",1,0,"title,description"]]""").Fields!);
+        Assert.Equal(["title", "description"], Unpack("""[["read","Post,Comment",0,0,"title,description"]]""").Fields!);
 
     [Fact]
     public void Converts_fields_to_null_if_its_value_is_empty() =>
-        Assert.Null(Unpack("""[["read","Post,Comment",1,0,""]]""").Fields);
+        Assert.Null(Unpack("""[["read","Post,Comment",0,0,""]]""").Fields);
 
     [Fact]
     public void Puts_6th_element_under_reason() =>
-        Assert.Equal("forbidden reason", Unpack("""[["read","Post,Comment",1,0,0,"forbidden reason"]]""").Reason);
+        Assert.Equal("forbidden reason", Unpack("""[["read","Post,Comment",0,0,0,"forbidden reason"]]""").Reason);
 
     [Fact]
     public void Converts_reason_to_null_if_its_value_is_empty() =>
-        Assert.Null(Unpack("""[["read","Post,Comment",1,0,0,""]]""").Reason);
+        Assert.Null(Unpack("""[["read","Post,Comment",0,0,0,""]]""").Reason);
 
     [Fact]
     public void Round_trips()
