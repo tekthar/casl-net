@@ -15,7 +15,7 @@
     <PackageReadmeFile>README.md</PackageReadmeFile>
     <PackageTags>authorization;permissions;abac;rbac;casl;ef-core;linq;row-level-security;field-level-security</PackageTags>
     <PackageReleaseNotes>https://github.com/tekthar/casl-net/blob/main/CHANGELOG.md</PackageReleaseNotes>
-    <VersionPrefix>0.1.0</VersionPrefix>
+    <VersionPrefix>0.2.0</VersionPrefix>
 
     <!-- Debugging into the package: SourceLink (built into the .NET SDK) and a symbol package next to the .nupkg. -->
     <PublishRepositoryUrl>true</PublishRepositoryUrl>
