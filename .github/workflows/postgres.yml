@@ -31,7 +31,7 @@ jobs:
     env:
       CASL_POSTGRES: Host=localhost;Port=5432;Username=postgres;Password=postgres
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: 10.0.x
