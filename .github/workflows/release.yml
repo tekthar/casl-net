@@ -34,7 +34,7 @@ jobs:
           dotnet-version: |
             8.0.x
             10.0.x
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: 22
       - name: The tag matches the version
@@ -100,7 +100,7 @@ jobs:
       id-token: write # trusted publishing, with provenance
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: 24
           registry-url: https://registry.npmjs.org
