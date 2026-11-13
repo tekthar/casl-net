@@ -18,8 +18,8 @@ may contain, so both sides reach the same decisions. The repository's compatibil
 npm install casl-net @casl/ability
 ```
 
-`@casl/ability` 6.7 or 7 is a peer dependency. Use 7.1.1 or later if you check objects parsed from JSON: earlier
-versions let a plain object name its own subject type through a `__caslSubjectType__` property. See the
+`@casl/ability` 6.7 or 7 is a peer dependency. Use 7.1.3 or later if you check objects parsed from JSON: earlier
+versions let a plain object name its own subject type through a `__caslSubjectType__` or `constructor` property. See the
 [browser guide](https://github.com/tekthar/casl-net/blob/main/docs/browser.md#in-the-browser).
 
 ## Use

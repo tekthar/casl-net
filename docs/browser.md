@@ -51,12 +51,18 @@ ability yourself. `@casl/ability` 6.7 and 7 work.
 Plain objects need their subject type, as in any CASL app: `subject('WorkItem', item)`, or CASL's `detectSubjectType`
 option.
 
-**Use `@casl/ability` 7.1.1 or later if the objects you check come from outside your code.** Before 7.1.1, CASL took
-a plain object's subject type from its `__caslSubjectType__` property even when `subject()` hadn't set it, so JSON
-from an API response, a URL or user input could name its own type: `JSON.parse('{"__caslSubjectType__":"Invoice"}')`
-was checked as an `Invoice`. From 7.1.1 CASL accepts the type only when `subject()` set it, and throws "Untrusted subject
-type" otherwise. `casl-net` still accepts 6.7 and 7.0 so existing apps keep working, but those versions don't have
-this check. If you stay on them, never check a parsed object without passing it through `subject()` first.
+**Use `@casl/ability` 7.1.3 or later if the objects you check come from outside your code.** CASL names a plain
+object's type from its `__caslSubjectType__` property or, without one, from `constructor.modelName` or
+`constructor.name`. Before 7.1.1 it trusted the first even when `subject()` hadn't set it, and before 7.1.3 it read an
+object's own `constructor` property too. JSON from an API response, a URL or user input could therefore name its own
+type: `JSON.parse('{"constructor":{"name":"Invoice"}}')` was checked as an `Invoice`. From 7.1.3 CASL ignores both: it
+accepts `__caslSubjectType__` only when `subject()` set it (otherwise it throws "Untrusted subject type"), and it treats
+an own `constructor` property as a plain `Object`. `casl-net` still accepts 6.7 and 7.0 so existing apps keep working,
+but those versions don't have these checks. If you stay on them, never check a parsed object without passing it
+through `subject()` first, which sets the type on every version.
+
+From 7.1.1, `subject()` marks objects for the copy of `@casl/ability` that ran it. Keep a single copy in your app
+(`npm ls @casl/ability`): an object tagged by one copy and checked by another throws "Untrusted subject type".
 
 ## Packed rules
 

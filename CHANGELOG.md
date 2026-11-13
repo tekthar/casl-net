@@ -7,10 +7,16 @@ says how.
 ## Unreleased
 
 **Documentation**
-- The browser guide and the `casl-net` package README now recommend `@casl/ability` 7.1.1 or later. Before 7.1.1, a
-  plain object parsed from JSON could name its own subject type through a `__caslSubjectType__` property. The peer
-  range stays `^6.7.0 || ^7.0.0`. The .NET library isn't affected, because `SubjectInstance` is only created through
-  `Subject.Of`. ([#8](https://github.com/tekthar/casl-net/issues/8))
+- The browser guide and the `casl-net` package README now recommend `@casl/ability` 7.1.3 or later. Before 7.1.1, a
+  plain object parsed from JSON could name its own subject type through a `__caslSubjectType__` property, and before
+  7.1.3 through an own `constructor` property. On older versions, passing the object through `subject()` keeps it safe.
+  The peer range stays `^6.7.0 || ^7.0.0`. The .NET library isn't affected, because it never reads a subject type from
+  an object's data. ([#8](https://github.com/tekthar/casl-net/issues/8), [#10](https://github.com/tekthar/casl-net/issues/10))
+
+**Tests**
+- The CASL compatibility test and the browser package now test against `@casl/ability` 7.1.3 (was 7.0.1). The test
+  installs `casl-net` as a copy rather than a symlink (`tests/casl-compat/.npmrc`), so both share one `@casl/ability`,
+  as in an app; from 7.1.1, `subject()` tags from one copy are untrusted by another.
 
 ## 0.2.0 (2026-10-31)
 
