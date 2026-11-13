@@ -43,6 +43,6 @@
     "@ucast/mongo2js": "^2.0.0"
   },
   "devDependencies": {
-    "@casl/ability": "7.0.1"
+    "@casl/ability": "7.1.2"
   }
 }
