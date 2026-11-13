@@ -1,0 +1,36 @@
+# Dependabot version updates. Security updates are switched on in the repository settings; the ignore rules below hold them back too.
+version: 2
+updates:
+  # Keeps the actions the workflows pin by commit SHA current (the version is the comment after each pin).
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+
+  # NuGet packages of every project in the solution. Minor and patch bumps arrive as one grouped pull request.
+  - package-ecosystem: nuget
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    ignore:
+      # Microsoft.* and System.* majors track the .NET major; take them together with a target-framework change.
+      - dependency-name: "Microsoft.*"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "System.*"
+        update-types: ["version-update:semver-major"]
+    groups:
+      nuget-minor-patch:
+        update-types: [minor, patch]
+
+  # The npm package and the compatibility tests. Minor and patch bumps arrive as one grouped pull request.
+  - package-ecosystem: npm
+    directories:
+      - /packages/casl-net
+      - /tests/casl-compat
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    groups:
+      npm-minor-patch:
+        update-types: [minor, patch]
