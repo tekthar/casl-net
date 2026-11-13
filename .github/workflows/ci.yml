@@ -29,7 +29,7 @@ jobs:
           npm ci
           npm test
       - run: dotnet pack src/Casl.Net -c Release --no-build -o artifacts
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: packages
           path: |
