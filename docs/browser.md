@@ -51,6 +51,13 @@ ability yourself. `@casl/ability` 6.7 and 7 work.
 Plain objects need their subject type, as in any CASL app: `subject('WorkItem', item)`, or CASL's `detectSubjectType`
 option.
 
+**Use `@casl/ability` 7.1.1 or later if the objects you check come from outside your code.** Before 7.1.1, CASL took
+a plain object's subject type from its `__caslSubjectType__` property even when `subject()` hadn't set it, so JSON
+from an API response, a URL or user input could name its own type: `JSON.parse('{"__caslSubjectType__":"Invoice"}')`
+was checked as an `Invoice`. From 7.1.1 CASL accepts the type only when `subject()` set it, and throws "Untrusted subject
+type" otherwise. `casl-net` still accepts 6.7 and 7.0 so existing apps keep working, but those versions don't have
+this check. If you stay on them, never check a parsed object without passing it through `subject()` first.
+
 ## Packed rules
 
 For many rules, CASL's compact format is smaller on the wire:

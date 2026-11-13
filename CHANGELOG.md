@@ -4,6 +4,14 @@ All notable changes to CASL .NET (`Casl.Net` on NuGet) and its browser companion
 [Semantic Versioning](https://semver.org); before 1.0, a minor version (0.2, 0.3) may change the API, and this file
 says how.
 
+## Unreleased
+
+**Documentation**
+- The browser guide and the `casl-net` package README now recommend `@casl/ability` 7.1.1 or later. Before 7.1.1, a
+  plain object parsed from JSON could name its own subject type through a `__caslSubjectType__` property. The peer
+  range stays `^6.7.0 || ^7.0.0`. The .NET library isn't affected, because `SubjectInstance` is only created through
+  `Subject.Of`. ([#8](https://github.com/tekthar/casl-net/issues/8))
+
 ## 0.2.0 (2026-10-31)
 
 **Security**
